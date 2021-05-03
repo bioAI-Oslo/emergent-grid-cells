@@ -64,7 +64,6 @@ class Agent:
     @property
     def angle_history(self):
         return np.array(self._angle_history)
-    
 
 
 if __name__ == "__main__":
@@ -80,6 +79,3 @@ if __name__ == "__main__":
     print(ag.angle_history)
     print(ag.velocity_history)
     print(ag.position_history)
-
-    
-
