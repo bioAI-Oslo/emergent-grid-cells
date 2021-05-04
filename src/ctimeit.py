@@ -1,16 +1,6 @@
-"""
-This function is not relevant for this repository,
-but is a nice method for easily timing functions 
-by simply decorating the method that we want to time.
-
-Author:
-	Vemund S. Schøyen
-	vemund@live.com
-	03.05.2021
-"""
 from timeit import default_timer as timer
 from functools import wraps
-import inspect
+from inspect import getframeinfo, stack, getargspec
 
 
 def ctimeit(function):
@@ -35,7 +25,7 @@ def ctimeit(function):
 
         # adds function name and argument info to print
         info = ""
-        argspec = inspect.getargspec(function)
+        argspec = getargspec(function)
         arg_strs = argspec[0]
         for i in range(len(args)):
             try:
@@ -49,8 +39,9 @@ def ctimeit(function):
         for arg_str in kwargs.keys():
             info += arg_str + "={}, ".format(kwargs[arg_str])
 
-        info = "{}(" + info[:-2] + ") used <{}> seconds"
-        info = info.format(function.__name__, (end - start))
+        caller = getframeinfo(stack()[1][0])
+        info = "File \"{}\", line {}, function: {}(" + info[:-2] + ") used <{}> seconds"
+        info = info.format(caller.filename, caller.lineno, function.__name__, (end - start))
         print(info)
 
         return output
