@@ -1,2 +1,2 @@
 from .Environment import Environment
-from .Square import Square
+from .Rectangle import Rectangle
