@@ -27,7 +27,7 @@ class Agent:
         new_speed = np.random.rayleigh(b) * dt
         new_turn = np.random.normal(mu, sigma) * dt
 
-        new_speed, new_turn = walls(
+        new_speed, new_turn, next_pos = walls(
             self.positions[-1], self.hds[-1], new_speed, new_turn
         )
 
@@ -37,6 +37,10 @@ class Agent:
             self.speeds = np.append(self.speeds, new_speed)
             self.hds = np.append(self.hds, new_hd)
             self.turns = np.append(self.turns, new_turn)
+            #print(self._positions.shape,next_pos)
+            self._positions = np.append(self._positions, next_pos[None], axis=0)
+            #self._positions = np.concatenate([self._positions, next_pos])
+            #print(self._positions.shape,next_pos)
 
         return new_speed, new_hd
 
@@ -46,7 +50,7 @@ class Agent:
         Euclidean velocity history
         """
         idx0 = self._velocities.shape[0]
-        if idx0 == self.speeds.shape[0]:
+        if idx0 < self.speeds.shape[0]:
             return self._velocities
 
         euclidean_direction = np.stack([np.cos(self.hds[idx0:]), np.sin(self.hds[idx0:])], axis=-1)
@@ -60,7 +64,7 @@ class Agent:
         Path integration (Euclidean position) history
         """
         idx0 = self._positions.shape[0]
-        if idx0 == self.speeds.shape[0]:
+        if idx0 < self.speeds.shape[0]:
             return self._positions
 
         #print(self.velocities[-1])

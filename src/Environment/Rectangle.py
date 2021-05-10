@@ -78,8 +78,8 @@ class Rectangle(Environment):
             # to the optimal escape direction
             next_hd_n = hd - turn
             vel_n = speed * np.cos(next_hd_n), speed * np.sin(next_hd_n)
-            score_p = ed @ np.array(vel)
-            score_n = ed @ np.array(vel_n)
+            score_p = ed @ vel
+            score_n = ed @ vel_n
             if score_n > score_p:
                 turn = -turn  # turn towards optimal escape direction
                 next_hd = next_hd_n
@@ -90,11 +90,11 @@ class Rectangle(Environment):
         #next_pos -= np.sign(next_pos) * 1e-06
         speed = euclidean(next_pos, pos)
 
-        print(pos, next_pos, speed)
+        #print(pos, next_pos, speed)
         # print("ST:", speed, turn)
         # print(speed * np.cos(hd + turn), speed * np.sin(hd + turn))
 
-        return speed, turn
+        return speed, turn, next_pos
 
     def walls_old(self, pos, prev_angle, speed, turn):
         """
