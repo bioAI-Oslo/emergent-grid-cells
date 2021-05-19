@@ -21,7 +21,7 @@ class Environment(metaclass=abc.ABCMeta):
         pass
 
     @abc.abstractmethod
-    def walls(self):
+    def avoid_walls(self):
         """
         Implements walls in the environment. 
 
