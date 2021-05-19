@@ -10,6 +10,26 @@ class Rectangle(Environment):
         self.boxsize = np.array(boxsize)  # top right coordinate
         self.soft_boundary = soft_boundary
 
+        # init walls
+        self.walls = {
+            "w1": {
+                "bias": self.origo,
+                "slope": np.array([self.origo[0], self.boxsize[1]]),
+            },
+            "w2": {
+                "bias": np.array([self.origo[0], self.boxsize[1]]),
+                "slope": np.array([self.boxsize[0], self.origo[1]]), 
+            },
+            "w3": {
+                "bias": np.array([self.boxsize[0], self.origo[1]]),
+                "slope": np.array([self.origo[0], self.boxsize[1]]),
+            },
+            "w4": { 
+                "bias": self.origo,
+                "slope": np.array([self.boxsize[0], self.origo[1]]),
+            },
+        }
+
     def get_board(self, res=(32, 32)):
         # initialize board
         xx, yy = np.meshgrid(
@@ -23,6 +43,46 @@ class Rectangle(Environment):
         Uniform sampling a 2d-rectangle is trivial with numpy
         """
         return np.random.uniform(self.origo, self.boxsize, size=(ns, 2))
+
+    def add_wall(self, wall_key, wall):
+        """Add wall to walls."""
+        self.walls[wall_key] = wall
+
+    def crash_point(self, pos, vel):
+        """
+        Treat current position and velocity, and walls as line-segments.
+        We can then find where the agent will crash on each wall
+        by solving a system of linear equations for each wall.
+        """
+        for wall_key in self.walls:
+            matrix = np.array([vel, self.walls[wall_key]["slope"]])
+            vector = pos - self.walls[wall_key]["bias"]
+            try:
+                solution = np.linalg.solve(matrix, vector)
+            except np.linalg.LinAlgError as e:
+                # Singular matrix (Agent trajectory parallell to wall)
+                print(e)
+                continue
+
+            solution = self.walls[wall_key]["bias"] + solution[1]*self.walls[wall_key]["slope"]
+
+            # Check if solution is inside environment,
+            # then choose the wall that is along the trajectory path
+            # (as opposed to the wall in the opposite direction)
+            #print("pos,vel,sol,wall,score", pos, vel, solution,wall_key, (vel @ (solution - pos)))
+            if self.inside_environment(solution) and (vel @ (solution - pos)) >= 0:
+                #print("ok")
+                return solution
+
+    def inside_environment(self, pos):
+        """
+        Check if agent is inside the defined environment
+        """
+        posx, posy = pos
+        statement = (self.origo[0] <= posx <= self.boxsize[0]) and (
+            self.origo[1] <= posy <= self.boxsize[1]
+        )
+        return statement
 
     def near_wall(self, pos):
         """
@@ -48,10 +108,10 @@ class Rectangle(Environment):
             # location within an arbitrary corner
             box_center = (self.boxsize - self.origo) / 2
             pos_wrt_center = pos - box_center
-            #optimal_escape_direction = pos_wrt_center - np.sign(pos_wrt_center) * (
+            # optimal_escape_direction = pos_wrt_center - np.sign(pos_wrt_center) * (
             #    box_center - self.soft_boundary
-            #)  # sorcery
-            optimal_escape_direction = - np.sign(pos_wrt_center) * (
+            # )  # sorcery
+            optimal_escape_direction = -np.sign(pos_wrt_center) * (
                 box_center - self.soft_boundary
             )  # sorcery
 
@@ -60,76 +120,32 @@ class Rectangle(Environment):
         # remaining scenarios are already optimal
         return scenario, escape_direction
 
-    def walls(self, pos, hd, speed, turn):
+    def avoid_walls(self, pos, hd, speed, turn):
         # escape direction
         scenario, ed = self.near_wall(pos)
 
-        next_hd = hd + turn
-        vel = speed * np.cos(next_hd), speed * np.sin(next_hd)
-
-        #print(scenario, ed)
         if scenario > 0:
-
-            speed = speed * 0.25  # as used by Sorscher
-            # Want to change speed to max half distance to nearest
-            # wall, however.
-
             # determine which turn direction is most similar
             # to the optimal escape direction
-            next_hd_n = hd - turn
-            vel_n = speed * np.cos(next_hd_n), speed * np.sin(next_hd_n)
-            score_p = ed @ vel
-            score_n = ed @ vel_n
+            score_p = ed @ [np.cos(hd + turn), np.sin(hd + turn)]
+            score_n = ed @ [np.cos(hd - turn), np.sin(hd - turn)]
             if score_n > score_p:
                 turn = -turn  # turn towards optimal escape direction
-                next_hd = next_hd_n
-                vel = vel_n
 
-        # clip next_position to within the environment
-        next_pos = np.clip(pos + vel, self.origo, self.boxsize)
-        #next_pos -= np.sign(next_pos) * 1e-06
-        speed = euclidean(next_pos, pos)
+            # slow down when near walls
+            #speed = speed * 0.25  # as used by Sorscher
 
-        #print(pos, next_pos, speed)
-        # print("ST:", speed, turn)
-        # print(speed * np.cos(hd + turn), speed * np.sin(hd + turn))
+        direction = np.array([np.cos(hd + turn), np.sin(hd + turn)])
+        crash_point = self.crash_point(pos, direction)
+
+        
+        # speed is maximum half the distance to the crash point
+        speed = min(speed, euclidean(pos, crash_point) / 2)
+
+        next_pos = pos + direction * speed
+        #print("pos, crash_point, next_pos, speed, direction", pos, crash_point,next_pos,speed,direction)
 
         return speed, turn, next_pos
-
-    def walls_old(self, pos, prev_angle, speed, turn):
-        """
-        Make sure agent is inside environment, and that
-        next step (speed, angle) does not take agent
-        outside environment.
-        """
-        # Check if agent is inside the defined environment
-        assert self.inside_environment(pos), "Agent outside box. Position={}".format(
-            pos
-        )
-
-        #
-        angle = prev_angle + turn
-        vel = speed * np.cos(angle), speed * np.sin(angle)
-        next_pos = pos + vel
-
-        # clip next_position to within the environment
-        next_pos = np.clip(next_pos, self.origo, self.boxsize)
-
-        # escape direction
-        ed = self.near_wall(next_pos, self.soft_boundary)
-
-        #
-        alternative_vel = speed * np.cos(-angle), speed * np.sin(-angle)
-        score1 = ed @ np.array(vel)
-        score2 = ed @ np.array(alternative_vel)
-        if score2 > score1:
-            turn = -turn
-
-        if sum(abs(ed)) > 0:
-            speed = speed * 0.25
-
-        return speed, turn
-
 
 if __name__ == "__main__":
     print(Rectangle())
