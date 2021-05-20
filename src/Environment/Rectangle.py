@@ -1,7 +1,8 @@
 import numpy as np
 from scipy.spatial.distance import euclidean
 
-from Environment import ABCEnvironment, intersect, projection_rejection
+from .ABCEnvironment import ABCEnvironment
+from .methods import intersect, projection_rejection
 
 
 class Rectangle(ABCEnvironment):
@@ -76,19 +77,31 @@ class Rectangle(ABCEnvironment):
 
     def wall_rejection(self, pos):
         """
-        Walls reject agent when it comes to close.
+        Walls reject agent when it comes too close.
         ed (escape direction) is the direction the agent is rejected towards.
         """
         ed = np.zeros(2)
-        for wall in self.walls.values():
-            _, rej = projection_rejection(pos, wall["slope"])
-            rej = rej - wall["bias"]
+        for wallname, wall in self.walls.items():
+            proj, rej = projection_rejection(pos - wall["bias"], wall["slope"])
+
+            # could neglect this if-test, but it saves a few unnecessary compuations
+            if "free_wall" in wallname:
+
+                # Projection-vector must have correct direction and be contained
+                # in the line-segment
+                direction = proj @ wall["slope"]
+                if not (
+                    (direction >= 0) and (direction <= wall["slope"] @ wall["slope"])
+                ):
+                    continue
+
             d = euclidean(self.origo, rej)
             ed += int(d <= self.soft_boundary) * (rej / d)  # unit-rejection
 
         return ed
 
     def avoid_walls(self, pos, hd, speed, turn):
+        # --- Regulate turn ---
         ed = self.wall_rejection(pos)
 
         # score next animal direction wrt. wall escape direction
@@ -97,6 +110,7 @@ class Rectangle(ABCEnvironment):
         if score_n > score_p:
             turn = -turn  # turn away from wall
 
+        # --- Regulate speed ---
         direction = np.array([np.cos(hd + turn), np.sin(hd + turn)])
         intersection = self.crash_point(pos, direction)
 
