@@ -12,7 +12,7 @@ class Agent:
 
         # add size to rat? e.g as an ellipsoid?
 
-    def step(self, walls, record_step=True):
+    def step(self, avoid_walls, record_step=True):
         """
         Sample a velocity vector - indirectly through speed
         and angle, i.e. (s,phi). The angle is an offset to
@@ -27,20 +27,15 @@ class Agent:
         new_speed = np.random.rayleigh(b) * dt
         new_turn = np.random.normal(mu, sigma) * dt
 
-        new_speed, new_turn, next_pos = walls(
+        new_speed, new_turn = avoid_walls(
             self.positions[-1], self.hds[-1], new_speed, new_turn
         )
-
         new_hd = np.mod(self.hds[-1] + new_turn, 2 * np.pi)
 
         if record_step:
             self.speeds = np.append(self.speeds, new_speed)
             self.hds = np.append(self.hds, new_hd)
             self.turns = np.append(self.turns, new_turn)
-            #print(self._positions.shape,next_pos)
-            self._positions = np.append(self._positions, next_pos[None], axis=0)
-            #self._positions = np.concatenate([self._positions, next_pos])
-            #print(self._positions.shape,next_pos)
 
         return new_speed, new_hd
 
@@ -50,11 +45,13 @@ class Agent:
         Euclidean velocity history
         """
         idx0 = self._velocities.shape[0]
-        if idx0 < self.speeds.shape[0]:
+        if idx0 == self.speeds.shape[0]:
             return self._velocities
 
-        euclidean_direction = np.stack([np.cos(self.hds[idx0:]), np.sin(self.hds[idx0:])], axis=-1)
-        velocity = euclidean_direction * self.speeds[idx0:][..., None]
+        direction = np.stack(
+            [np.cos(self.hds[idx0:]), np.sin(self.hds[idx0:])], axis=-1
+        )
+        velocity = direction * self.speeds[idx0:][..., None]
         self._velocities = np.concatenate([self._velocities, velocity])
         return self._velocities
 
@@ -64,10 +61,9 @@ class Agent:
         Path integration (Euclidean position) history
         """
         idx0 = self._positions.shape[0]
-        if idx0 < self.speeds.shape[0]:
+        if idx0 == self.speeds.shape[0]:
             return self._positions
 
-        #print(self.velocities[-1])
         delta_p = np.cumsum(self.velocities[idx0:], axis=0)
         self._positions = np.concatenate(
             [self._positions, delta_p + self._positions[-1]]
