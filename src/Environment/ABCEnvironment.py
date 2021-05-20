@@ -1,7 +1,7 @@
 import abc
 
 
-class Environment(metaclass=abc.ABCMeta):
+class ABCEnvironment(metaclass=abc.ABCMeta):
     """
     Abstract/skeleton class for alternative 
     environments that the animal can traverse.
