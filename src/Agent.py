@@ -2,7 +2,21 @@ import numpy as np
 from ctimeit import ctimeit  # custom timing of functions
 
 
-def generate_trajectory(
+def batch_generator(batch_size=64,*args,**kwargs):
+    """Mini-batch trajectory generator"""
+    tgen = trajectory_generator(*args,**kwargs)
+    seq_len = args[1] if len(args) >= 2 else kwargs['seq_len']
+    mb_pos, mb_vel = np.zeros((batch_size,seq_len,2)), np.zeros((batch_size,seq_len,2))
+    
+    while True:
+        for i in range(batch_size):
+            pos,vel = next(tgen)[:2]
+            mb_pos[i] = pos
+            mb_vel[i] = vel
+
+        yield mb_pos, mb_vel
+
+def trajectory_generator(
     environment, seq_len=20, start_angle=None, start_pos=None, **kwargs
 ):
     # create agent
@@ -40,7 +54,7 @@ class Agent:
         self.mu = mu  # turn angle bias
 
         # N+1 len array histories (since we include start pos and hd)
-        self.hds = np.array([angle0])  # head direction history
+        self.hds = np.array([angle0]) if angle0 is None else np.random.uniform(0, 2 * np.pi,size=1)  # head direction history
         self.speeds = np.zeros(1)  # speed history
         self.turns = np.zeros(1)  # turn direction history
         self._velocities = np.zeros(
@@ -102,6 +116,18 @@ class Agent:
         )
         return self._positions
 
+    def plot_trajectory(self, ax, ds=4):
+        # plot animal path
+        n=self.positions.shape[0]
+        c=np.zeros((n,4))
+        c[:,-1] = 1
+        c[:,:-1] = 0.9-np.linspace(0,0.9,n)[:,None]
+        ax.scatter(*self.positions.T,s=0.1,c=c)
+
+        i = 0
+        for pos,vel in zip(self.positions[::ds], self.velocities[::ds]):
+            ax.arrow(*pos,*vel,head_width=0.02,color=c[::ds][i])
+            i+=1
 
 if __name__ == "__main__":
     """
