@@ -1,7 +1,7 @@
 import collections
 import numpy as np
 from scipy.stats import norm, multivariate_normal
-from scipy.spatial.distance import euclidean
+from scipy.spatial.distance import euclidean, cdist
 
 
 class Brain:
@@ -17,18 +17,31 @@ class Brain:
         self.npcs = npcs
         self.sigma = sigma
 
-    def d_pcc(self, pos, pc, wall_exceptions=[]):
+    def __call__(self, pos, metric="euclidean"):
+        """Brain response/basis: dist U tuning-curve"""
+        # cdist() takes matrices (2D) inputs. reshape to satisfy
+        if len(pos.shape) == 1:
+            pos = pos[None]
+            pos_shape = pos.shape[:-1]
+        elif len(pos.shape) == 3:
+            pos_shape = pos.shape[:-1]
+            pos = pos.reshape(np.prod(pos.shape[:-1]), pos.shape[-1])
+
+        dists = cdist(pos, self.pcs, metric=metric)
+        return self.ricker_response(dists).reshape(list(pos_shape) + [self.npcs])
+
+    def d_pcc(self, pos, pc):
         """
         (Shortest geodesic?) distance to a place cell center
         """
-        return euclidean(pos,pc) # skip-geodesic
+        return euclidean(pos, pc)  # skip-geodesic
 
         # GEODESIC: NOT COMPLETE / UNDER DEV
-        ni, wall = self.env.crash_point(pos, pc - pos, wall_exceptions)
+        ni, wall = self.env.crash_point(pos, pc - pos)
         atcf = euclidean(pos, pc)
         if atcf <= euclidean(pos, ni) or euclidean(pos, ni) < 1e-12:
             # no obstruction => as the crow flies (atcf)
-            # either from an open position in the env or 
+            # either from an open position in the env or
             # from sitting on a wall (< 1e-12. i.e. +- epsilon).
             return atcf
 
@@ -40,21 +53,19 @@ class Brain:
         # with maximum one corner (and no dead-ends) have geodesic distance
         # currently implemented OBS!
         if bias_corner:
-        	d1 = np.inf
+            d1 = np.inf
         else:
-            d1 = self.d_pcc(pos, bias_branch, wall_exceptions=[]) + self.d_pcc(
-                bias_branch, pc, wall_exceptions=[]
-            )
+            d1 = self.d_pcc(pos, bias_branch) + self.d_pcc(bias_branch, pc)
 
         if end_corner:
-        	d2 = np.inf
+            d2 = np.inf
         else:
-            d2 = self.d_pcc(pos, end_branch, wall_exceptions=[]) + self.d_pcc(
-                end_branch, pc, wall_exceptions=[]
-            )
+            d2 = self.d_pcc(pos, end_branch) + self.d_pcc(end_branch, pc)
 
         if d1 == np.inf and d2 == np.inf:
-        	raise NotImplementedError('Shortest distance in env with dead ends not implemented.')
+            raise NotImplementedError(
+                "Shortest distance in env with dead ends not implemented."
+            )
 
         return min(d1, d2)
 
