@@ -27,7 +27,7 @@ def intersect(
     except np.linalg.LinAlgError as e:
         # Singular matrix (parallell line segments)
         print(e)
-        return None
+        return None, False
 
     # check if solution satisfies constraints
     if (constraint1[0] <= solution[0] <= constraint1[1]) and (
