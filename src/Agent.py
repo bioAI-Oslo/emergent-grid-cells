@@ -2,12 +2,50 @@ import numpy as np
 from ctimeit import ctimeit  # custom timing of functions
 
 
+def generate_trajectory(
+    environment, seq_len=20, start_angle=None, start_pos=None, **kwargs
+):
+    # create agent
+    sa, sp = start_angle, start_pos
+    agent = Agent(
+        np.random.uniform(0, 2 * np.pi), environment.sample_uniform(1), **kwargs
+    )
+
+    while True:
+        # re-initialize agent
+        sa = np.random.uniform(0, 2 * np.pi) if start_angle is None else start_angle
+        sp = environment.sample_uniform(1) if start_pos is None else start_pos
+        agent.__init__(sa, sp, **kwargs)
+
+        # generate track
+        for i in range(seq_len):
+            start_pos = environment.sample_uniform(1)
+            start_angle = np.random.uniform(0, 2 * np.pi)
+
+            agent.step(environment.avoid_walls)
+
+        yield agent._positions, agent._velocities, agent.hds, agent.speeds, agent.turns, agent
+
+
 class Agent:
-    def __init__(self, angle0, speed0, p0=None):
-        self.speeds = np.array([speed0])  # speed history
+    def __init__(
+        self, angle0=None, p0=None, dt=0.02, sigma=5.76 * 2, b=0.13 * 2 * np.pi, mu=0
+    ):
+        """
+        default constants are the ones Sorscher used
+        """
+        self.dt = dt
+        self.sigma = sigma  # stdev rotation velocity (rads/sec)
+        self.b = b  # forward velocity rayleigh dist scale (m/sec)
+        self.mu = mu  # turn angle bias
+
+        # N+1 len array histories (since we include start pos and hd)
         self.hds = np.array([angle0])  # head direction history
-        self.turns = np.zeros(0)  # turn direction history
-        self._velocities = np.zeros((0, 2))  # velocity history
+        self.speeds = np.zeros(1)  # speed history
+        self.turns = np.zeros(1)  # turn direction history
+        self._velocities = np.zeros(
+            (0, 2)
+        )  # velocity history (also N+1, but only when called)
         self._positions = np.zeros((1, 2)) if p0 is None else p0  # position history
 
         # add size to rat? e.g as an ellipsoid?
@@ -18,14 +56,8 @@ class Agent:
         and angle, i.e. (s,phi). The angle is an offset to
         the angle at the previous time step.
         """
-        # constants used by Sorscher:
-        dt = 0.02
-        sigma = 5.76 * 2  # stdev rotation velocity (rads/sec)
-        b = 0.13 * 2 * np.pi  # forward velocity rayleigh dist scale (m/sec)
-        mu = 0  # turn angle bias
-
-        new_speed = np.random.rayleigh(b) * dt
-        new_turn = np.random.normal(mu, sigma) * dt
+        new_speed = np.random.rayleigh(self.b) * self.dt
+        new_turn = np.random.normal(self.mu, self.sigma) * self.dt
 
         new_speed, new_turn = avoid_walls(
             self.positions[-1], self.hds[-1], new_speed, new_turn
