@@ -93,7 +93,7 @@ class Rectangle(ABCEnvironment):
         """
         return (self.boxsize >= (pos - self.origo)).all() and (pos >= self.origo).all()
 
-    def crash_point(self, pos, vel, wall_exceptions=[]):
+    def crash_point(self, pos, vel):
         """
         Treat current position and velocity, and walls as line-segments.
         We can then find where the agent will crash on each wall
@@ -101,11 +101,6 @@ class Rectangle(ABCEnvironment):
         """
         nearest_intersection = None
         for wall in self.walls:
-
-            # user-specified leave-wall-out
-            if wall in wall_exceptions:
-                continue
-
             intersection, valid_intersect = intersect(
                 pos, vel, wall.bias, wall.slope, [0, np.inf], wall.t
             )
