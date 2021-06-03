@@ -1,11 +1,12 @@
-import collections
 import numpy as np
+import tensorflow as tf
+
 from scipy.stats import norm, multivariate_normal
 from scipy.spatial.distance import euclidean, cdist
 
 
 class Brain:
-    def __init__(self, env, npcs, sigma):
+    def __init__(self, env, npcs, sigma=0.12):
         """
         Args:
                 env: ABCEnvironment class instance
@@ -17,7 +18,7 @@ class Brain:
         self.npcs = npcs
         self.sigma = sigma
 
-    def __call__(self, pos, metric="euclidean"):
+    def __call__(self, pos, lateral_inhibition=True, activity_model=None, metric="euclidean"):
         """Brain response/basis: dist U tuning-curve"""
         # cdist() takes matrices (2D) inputs. reshape to satisfy
         if len(pos.shape) == 1:
@@ -27,8 +28,56 @@ class Brain:
             pos_shape = pos.shape[:-1]
             pos = pos.reshape(np.prod(pos.shape[:-1]), pos.shape[-1])
 
+        # distance to place cell center
         dists = cdist(pos, self.pcs, metric=metric)
-        return self.ricker_response(dists).reshape(list(pos_shape) + [self.npcs])
+
+        # unit place-cell activity (wrt. tuning curve)
+        activity = self.ricker_response(dists) if activity_model is None else activity_model(dists)
+
+        # Bio: Lateral inhibition. Engineering: Place-cell activity ensemble
+        # must satisfy probability distribution requirements (else cross-entropy
+        # is invalid).
+        if lateral_inhibition:
+            activity -= np.min(activity, axis=-1, keepdims=True)
+            activity /= np.sum(activity, axis=-1, keepdims=True)
+
+        return activity.reshape(list(pos_shape) + [self.npcs])
+
+    def softmax_response(self, pos, DoG=False, surround_scale=2, metric="euclidean"):
+        """Place cell response as modelled by Sorscher"""
+        if len(pos.shape) == 1:
+            pos = pos[None]
+            pos_shape = pos.shape[:-1]
+        elif len(pos.shape) == 3:
+            pos_shape = pos.shape[:-1]
+            pos = pos.reshape(np.prod(pos.shape[:-1]), pos.shape[-1])
+
+        # distance to place cell center
+        dists = cdist(pos, self.pcs, metric=metric)
+
+        # cast to tf.Tensor, dtype=tf.float32, use tf's softmax func
+        # and recast to numpy array
+        activity = tf.keras.activations.softmax(
+            tf.convert_to_tensor(-dists / (2 * self.sigma ** 2), dtype=tf.float32)
+        ).numpy()
+
+        if DoG:
+            activity -= tf.keras.activations.softmax(
+                tf.convert_to_tensor(
+                    -dists / (2 * surround_scale * self.sigma ** 2), dtype=tf.float32
+                )
+            ).numpy()
+
+            # after DoG, activity is not a probability dist anymore
+            # shift and rescale s.t it becomes a prob dist again.
+            activity -= np.min(activity, axis=-1, keepdims=True)
+            activity /= np.sum(activity, axis=-1, keepdims=True)
+
+        return activity.reshape(list(pos_shape) + [self.npcs])
+
+    def inverse(self):
+        """To Euclidean coordinates from place-cell coordinates"""
+        pass  # not implemented yet
 
     def d_pcc(self, pos, pc):
         """
