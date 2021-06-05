@@ -6,8 +6,8 @@ def batch_trajectory_generator(batch_size=64, *args, **kwargs):
     """Mini-batch trajectory generator"""
     tgen = trajectory_generator(*args, **kwargs)
     seq_len = args[1] if len(args) >= 2 else kwargs["seq_len"]
-    mb_pos, mb_vel = np.zeros((batch_size, seq_len, 2)), np.zeros(
-        (batch_size, seq_len, 2)
+    mb_pos, mb_vel = np.zeros((batch_size, seq_len + 1, 2)), np.zeros(
+        (batch_size, seq_len + 1, 2)
     )
 
     while True:
@@ -36,12 +36,9 @@ def trajectory_generator(
 
         # generate track
         for i in range(seq_len):
-            start_pos = environment.sample_uniform(1)
-            start_angle = np.random.uniform(0, 2 * np.pi)
-
             agent.step(environment.avoid_walls)
 
-        yield agent._positions, agent._velocities, agent.hds, agent.speeds, agent.turns, agent
+        yield agent.positions, agent.velocities, agent.hds, agent.speeds, agent.turns, agent
 
 
 class Agent:
@@ -80,9 +77,10 @@ class Agent:
         new_speed = np.random.rayleigh(self.b) * self.dt
         new_turn = np.random.normal(self.mu, self.sigma) * self.dt
 
-        new_speed, new_turn = avoid_walls(
-            self.positions[-1], self.hds[-1], new_speed, new_turn
-        )
+        if avoid_walls is not None:
+            new_speed, new_turn = avoid_walls(
+                self.positions[-1], self.hds[-1], new_speed, new_turn
+            )
         new_hd = np.mod(self.hds[-1] + new_turn, 2 * np.pi)
 
         if record_step:
@@ -124,13 +122,17 @@ class Agent:
         return self._positions
 
     def plot_trajectory(self, ax, ds=4):
-        # plot animal path
+        """plot animal path"""
+        # fading color for early positions (wrt. time) of path positions
         n = self.positions.shape[0]
         c = np.zeros((n, 4))
         c[:, -1] = 1
         c[:, :-1] = 0.9 - np.linspace(0, 0.9, n)[:, None]
+
+        # plot animal path
         ax.scatter(*self.positions.T, s=0.1, c=c)
 
+        # add fancy velocity-arrows to path
         i = 0
         for pos, vel in zip(self.positions[::ds], self.velocities[::ds]):
             ax.arrow(*pos, *vel, head_width=0.02, color=c[::ds][i])
