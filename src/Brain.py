@@ -18,7 +18,9 @@ class Brain:
         self.npcs = npcs
         self.sigma = sigma
 
-    def __call__(self, pos, lateral_inhibition=True, activity_model=None, metric="euclidean"):
+    def __call__(
+        self, pos, lateral_inhibition=True, activity_model=None, metric="euclidean"
+    ):
         """Brain response/basis: dist U tuning-curve"""
         # cdist() takes matrices (2D) inputs. reshape to satisfy
         if len(pos.shape) == 1:
@@ -32,7 +34,11 @@ class Brain:
         dists = cdist(pos, self.pcs, metric=metric)
 
         # unit place-cell activity (wrt. tuning curve)
-        activity = self.ricker_response(dists) if activity_model is None else activity_model(dists)
+        activity = (
+            self.ricker_response(dists)
+            if activity_model is None
+            else activity_model(dists)
+        )
 
         # Bio: Lateral inhibition. Engineering: Place-cell activity ensemble
         # must satisfy probability distribution requirements (else cross-entropy
@@ -74,6 +80,16 @@ class Brain:
             activity /= np.sum(activity, axis=-1, keepdims=True)
 
         return activity.reshape(list(pos_shape) + [self.npcs])
+
+    def to_euclid(self, activity, k=3):
+        """
+        Decode place-cell activity to Euclidean coordiantes - following Sorscher.
+        OBS! This is an approximation to the actual Euclidean location,
+        by considering the top k place-cell activities as if the agent is located
+        at the average k place-cell center location
+        """
+        mus = tf.math.top_k(activity, k=k).indices.numpy()
+        return np.mean(self.pcs[mus], axis=-2)
 
     def inverse(self):
         """To Euclidean coordinates from place-cell coordinates"""
@@ -118,14 +134,16 @@ class Brain:
 
         return min(d1, d2)
 
-    def multivar_norm_response(self, pos, pc):
+    def multivar_norm_response(self, pos, pcs=None):
         """
         Returns activity where place cell tuning curves are
         modelled as a multivariate gaussian func
         """
-        activity = multivariate_normal.pdf(pos, pc, np.diag(self.sigma))
+        pcs = self.pcs if pcs is None else pcs
+        activity = multivariate_normal.pdf(pos, pcs, np.diag(self.sigma))
         activity = euclidean(activity, np.zeros_like(activity))  # magnitude
-        return activity
+        # return activity
+        pass  # Currently incomplete func.
 
     def norm_response(self, d):
         """
