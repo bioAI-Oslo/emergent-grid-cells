@@ -25,9 +25,11 @@ class Brain:
         # cdist() takes matrices (2D) inputs. reshape to satisfy
         if len(pos.shape) == 1:
             pos = pos[None]
-            pos_shape = pos.shape[:-1]
+            out_shape = self.npcs
+        elif len(pos.shape) == 2:
+            out_shape = [pos.shape[0], self.npcs]
         elif len(pos.shape) == 3:
-            pos_shape = pos.shape[:-1]
+            out_shape = list(pos.shape[:-1]) + [self.npcs]
             pos = pos.reshape(np.prod(pos.shape[:-1]), pos.shape[-1])
 
         # distance to place cell center
@@ -47,15 +49,17 @@ class Brain:
             activity -= np.min(activity, axis=-1, keepdims=True)
             activity /= np.sum(activity, axis=-1, keepdims=True)
 
-        return activity.reshape(list(pos_shape) + [self.npcs])
+        return activity.reshape(out_shape)
 
     def softmax_response(self, pos, DoG=False, surround_scale=2, metric="euclidean"):
         """Place cell response as modelled by Sorscher"""
         if len(pos.shape) == 1:
             pos = pos[None]
-            pos_shape = pos.shape[:-1]
+            out_shape = self.npcs
+        elif len(pos.shape) == 2:
+            out_shape = [pos.shape[0], self.npcs]
         elif len(pos.shape) == 3:
-            pos_shape = pos.shape[:-1]
+            out_shape = list(pos.shape[:-1]) + [self.npcs]
             pos = pos.reshape(np.prod(pos.shape[:-1]), pos.shape[-1])
 
         # distance to place cell center
@@ -79,11 +83,11 @@ class Brain:
             activity -= np.min(activity, axis=-1, keepdims=True)
             activity /= np.sum(activity, axis=-1, keepdims=True)
 
-        return activity.reshape(list(pos_shape) + [self.npcs])
+        return activity.reshape(out_shape)
 
     def to_euclid(self, activity, k=3):
         """
-        Decode place-cell activity to Euclidean coordiantes - following Sorscher.
+        Decode place-cell activity to Euclidean coordinates - following Sorscher.
         OBS! This is an approximation to the actual Euclidean location,
         by considering the top k place-cell activities as if the agent is located
         at the average k place-cell center location
