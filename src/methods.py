@@ -1,9 +1,6 @@
 import torch
 
 def generic_train_loop(model, trainloader, optimizer, criterion, nepochs):
-    """
-    Standard DL training loop
-    """
     loss_history = []
     # loop over the dataset many times with progressbar from tqdm
     for epoch in tqdm.trange(nepochs):

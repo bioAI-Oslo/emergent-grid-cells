@@ -1,5 +1,5 @@
 import numpy as np
-import tensorflow as tf
+import torch
 
 from scipy.stats import norm, multivariate_normal
 from scipy.spatial.distance import euclidean, cdist
@@ -65,17 +65,16 @@ class Brain:
         # distance to place cell center
         dists = cdist(pos, self.pcs, metric=metric)
 
-        # cast to tf.Tensor, dtype=tf.float32, use tf's softmax func
+        # cast to torch.tensor, use torch softmax func
         # and recast to numpy array
-        activity = tf.keras.activations.softmax(
-            tf.convert_to_tensor(-dists / (2 * self.sigma ** 2), dtype=tf.float32)
+        torch.nn.functional.softmax(place_preds)
+        activity = torch.nn.functional.softmax(
+            torch.tensor(-dists / (2 * self.sigma ** 2))
         ).numpy()
 
         if DoG:
-            activity -= tf.keras.activations.softmax(
-                tf.convert_to_tensor(
-                    -dists / (2 * surround_scale * self.sigma ** 2), dtype=tf.float32
-                )
+            activity = torch.nn.functional.softmax(
+                torch.tensor(-dists / (2 * surround_scale * self.sigma ** 2))
             ).numpy()
 
             # after DoG, activity is not a probability dist anymore
@@ -92,12 +91,13 @@ class Brain:
         by considering the top k place-cell activities as if the agent is located
         at the average k place-cell center location
         """
-        mus = tf.math.top_k(activity, k=k).indices.numpy()
-        return np.mean(self.pcs[mus], axis=-2)
+        #mus = tf.math.top_k(activity, k=k).indices.numpy()
+        #return np.mean(self.pcs[mus], axis=-2)
+        return NotImplementedError
 
     def inverse(self):
         """To Euclidean coordinates from place-cell coordinates"""
-        pass  # not implemented yet
+        return NotImplementedError
 
     def d_pcc(self, pos, pc):
         """

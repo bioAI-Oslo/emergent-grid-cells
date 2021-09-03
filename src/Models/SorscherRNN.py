@@ -55,7 +55,33 @@ class SorscherRNN(torch.nn.Module):
         cross_entropy = torch.sum(labels * torch.log(prediction),axis=-1)
         return torch.mean(cross_entropy)
 
+    def train(self, trainloader, optimizer, nepochs, nsteps):
+        """
+        Modified generic train loop for sorscher rnn. Data is arbitrary
+        large since it is generated and not a fixed set.
+        """
+        loss_history = []
+        pbar = tqdm.tqdm(range(nepochs))
+        for epoch in pbar:
+            # generic torch training loop
+            running_loss = 0.0
+            for _ in nsteps:
+                # get the inputs; data is a list of [inputs, labels]
+                inputs, labels = next(trainloader)
 
+                # zero the parameter gradients
+                optimizer.zero_grad()
+
+                # forward + backward + optimize
+                outputs = model(inputs)
+                loss = self.loss_fn(outputs, labels)
+                loss.backward()
+                optimizer.step()
+
+                running_loss = loss.item()
+
+            loss_history.append(running_loss / nsteps)
+            pbar.set_description(f"Epoch={epoch}, loss={loss_history[-1]}")
 
 
 
