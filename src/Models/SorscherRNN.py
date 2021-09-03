@@ -6,60 +6,54 @@ class SorscherRNN(torch.nn.Module):
     Model based on:
     https://github.com/ganguli-lab/grid-pattern-formation/blob/master/model.py
     """
+
     def __init__(
         self,
+        input_size=2,
         Ng=4096,
         Np=512,
         weight_decay=1e-4,
-        activation="relu",
+        nonlinearity="relu",
         **kwargs
     ):
         super(SorscherRNN, self).__init__(**kwargs)
+        self.input_size = input_size
         self.Ng, self.Np = Ng, Np
 
         # define network architecture
-        self.encoder = Dense(self.Ng, name="encoder", use_bias=False)
-        self.encoder = torch.nn.Linear(input_size, hidden_size, bias=True)
-        self.RNN = SimpleRNN(
-            self.Ng,
-            return_sequences=True,
-            activation=activation,
-            recurrent_initializer="glorot_uniform",
-            recurrent_regularizer=tf.keras.regularizers.L2(weight_decay),
-            name="RNN",
-            use_bias=False,
+        self.encoder = torch.nn.Linear(Np, Ng, bias=False)
+        self.RNN = torch.nn.RNN(
+            input_size=2,
+            hidden_size=Ng,
+            num_layers=1,
+            nonlinearity=nonlinearity,
+            bias=False,
+            batch_first=True,
         )
         # Linear read-out weights
-        self.decoder = Dense(self.Np, name="decoder", use_bias=False)
+        self.decoder = torch.nn.Linear(Ng, Np, bias=False)
 
     def g(self, inputs):
-        """
-        Compute grid cell activations.
-        Args:
-            inputs: Batch of 2d velocity inputs with shape [batch_size, sequence_length, 2].
-        Returns:
-            g: Batch of grid cell activations with shape [batch_size, sequence_length, Ng].
-        """
         v, p0 = inputs
         init_state = self.encoder(p0)
-        return self.RNN(v, initial_state=init_state)
+        # return only final prediction in sequence
+        return self.RNN(v, p0)[-1][0]
 
-    def call(self, inputs, softmax=False):
-        """
-        Predict place cell code.
-        Args:
-            inputs: Batch of 2d velocity inputs with shape [batch_size, sequence_length, 2].
-        Returns:
-            place_preds: Predicted place cell activations with shape
-                [batch_size, sequence_length, Np].
-        """
+    def forward(self, inputs, softmax=False):
         place_preds = self.decoder(self.g(inputs))
+        return torch.nn.functional.softmax(place_preds) if softmax else place_preds
 
-        return (
-            place_preds
-            if not softmax
-            else tf.keras.activations.softmax(place_preds)
-        )
+    def loss_fn(self, inputs, labels):
+        """
+        Args:
+            inputs ((B, S, 2), (B, Np)): velocity and position in pc-basis
+            labels (B, Np): ground truth pc population activations
+        """
+        prediction = self(inputs, softmax=True)
+        # Actual cross entropy between two distributions p(x) and q(x),
+        # rather than classic CE implementations assuming one-hot p(x).
+        cross_entropy = torch.sum(labels * torch.log(prediction),axis=-1)
+        return torch.mean(cross_entropy)
 
 
 
