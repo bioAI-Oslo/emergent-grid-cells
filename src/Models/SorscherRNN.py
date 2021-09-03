@@ -1,8 +1,7 @@
-import tensorflow as tf
-from tensorflow.keras.layers import Dense, SimpleRNN
+import torch
 
 
-class SorscherRNN(tf.keras.Model):
+class SorscherRNN(torch.nn.Module):
     """
     Model based on:
     https://github.com/ganguli-lab/grid-pattern-formation/blob/master/model.py
@@ -16,11 +15,11 @@ class SorscherRNN(tf.keras.Model):
         **kwargs
     ):
         super(SorscherRNN, self).__init__(**kwargs)
-        self.Ng = Ng
-        self.Np = Np
+        self.Ng, self.Np = Ng, Np
 
         # define network architecture
         self.encoder = Dense(self.Ng, name="encoder", use_bias=False)
+        self.encoder = torch.nn.Linear(input_size, hidden_size, bias=True)
         self.RNN = SimpleRNN(
             self.Ng,
             return_sequences=True,
