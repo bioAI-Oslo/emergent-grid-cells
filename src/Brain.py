@@ -67,15 +67,14 @@ class Brain:
 
         # cast to torch.tensor, use torch softmax func
         # and recast to numpy array
-        torch.nn.functional.softmax(place_preds)
         activity = torch.nn.functional.softmax(
             torch.tensor(-dists / (2 * self.sigma ** 2))
-        ).numpy()
+        , dim=-1).numpy()
 
         if DoG:
             activity = torch.nn.functional.softmax(
                 torch.tensor(-dists / (2 * surround_scale * self.sigma ** 2))
-            ).numpy()
+                , dim=-1).numpy()
 
             # after DoG, activity is not a probability dist anymore
             # shift and rescale s.t it becomes a prob dist again.

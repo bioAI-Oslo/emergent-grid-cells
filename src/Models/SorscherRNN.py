@@ -1,5 +1,5 @@
 import torch
-
+import tqdm
 
 class SorscherRNN(torch.nn.Module):
     """
@@ -37,22 +37,21 @@ class SorscherRNN(torch.nn.Module):
         v, p0 = inputs
         init_state = self.encoder(p0)
         # return only final prediction in sequence
-        return self.RNN(v, p0)[-1][0]
+        return self.RNN(v, init_state[None])[-1][0]
 
     def forward(self, inputs, softmax=False):
         place_preds = self.decoder(self.g(inputs))
         return torch.nn.functional.softmax(place_preds) if softmax else place_preds
 
-    def loss_fn(self, inputs, labels):
+    def loss_fn(self, predictions, labels):
         """
         Args:
             inputs ((B, S, 2), (B, Np)): velocity and position in pc-basis
             labels (B, Np): ground truth pc population activations
         """
-        prediction = self(inputs, softmax=True)
         # Actual cross entropy between two distributions p(x) and q(x),
         # rather than classic CE implementations assuming one-hot p(x).
-        cross_entropy = torch.sum(labels * torch.log(prediction),axis=-1)
+        cross_entropy = torch.sum(- labels * torch.log(predictions),axis=-1)
         return torch.mean(cross_entropy)
 
     def train(self, trainloader, optimizer, nepochs, nsteps):
@@ -65,7 +64,7 @@ class SorscherRNN(torch.nn.Module):
         for epoch in pbar:
             # generic torch training loop
             running_loss = 0.0
-            for _ in nsteps:
+            for _ in range(nsteps):
                 # get the inputs; data is a list of [inputs, labels]
                 inputs, labels = next(trainloader)
 
@@ -73,8 +72,8 @@ class SorscherRNN(torch.nn.Module):
                 optimizer.zero_grad()
 
                 # forward + backward + optimize
-                outputs = model(inputs)
-                loss = self.loss_fn(outputs, labels)
+                predictions = self(inputs, softmax=True)
+                loss = self.loss_fn(predictions, labels)
                 loss.backward()
                 optimizer.step()
 
