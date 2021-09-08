@@ -1,4 +1,6 @@
 import torch
+from ratsimulator import batch_trajectory_generator
+import torch.utils.data as tdata
 
 def generic_train_loop(model, trainloader, optimizer, criterion, nepochs):
     loss_history = []
@@ -24,3 +26,24 @@ def generic_train_loop(model, trainloader, optimizer, criterion, nepochs):
         loss_history.append(running_loss / len(trainloader))
 
     return model, loss_history
+
+
+
+class Dataset(torch.utils.data.Dataset):
+    def __init__(self, num_workers = 1, *args, **kwargs):
+        btgs = [batch_trajectory_generator(*args, **kwargs) for _ in range(num_workers)]
+        
+    def __len__(self):
+        """
+        Length of dataset. But since generated, set
+        to a large fixed value.
+        """
+        return 1000 # 
+
+    def __getitem__(self, index):
+        worker_info = tdata.get_worker_info()
+        print(worker_info)
+
+        return None
+
+
