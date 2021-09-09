@@ -42,7 +42,16 @@ class Dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         worker_info = tdata.get_worker_info()
-        print(worker_info)
+        worker_id = 0
+        if worker_info:
+                worker_id = worker_info.id
+        
+        pos, vel = next(btgs[worker_id])
+        
+
+        # Insert code similar to "Data generator" in notebook
+        # however, do it so that we do not need to load with seq_len=2, but rather seq_len=1...
+        # this will proly save some loading time!! 
 
         return None
 
