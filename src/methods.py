@@ -1,6 +1,7 @@
 import torch
-from ratsimulator import batch_trajectory_generator
+from ratsimulator import trajectory_generator 
 import torch.utils.data as tdata
+from Brain import *
 
 def generic_train_loop(model, trainloader, optimizer, criterion, nepochs):
     loss_history = []
@@ -30,29 +31,38 @@ def generic_train_loop(model, trainloader, optimizer, criterion, nepochs):
 
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, num_workers = 1, *args, **kwargs):
-        btgs = [batch_trajectory_generator(*args, **kwargs) for _ in range(num_workers)]
-        
+    def __init__(self, brain, batch_size=64, nsteps = 100, *args, **kwargs):
+        self.tg = trajectory_generator(*args, **kwargs)
+        self.brain = brain
+        self.batch_size = batch_size
+        self.nsteps = nsteps
+
     def __len__(self):
         """
         Length of dataset. But since generated, set
         to a large fixed value.
         """
-        return 1000 # 
+        return self.nsteps * self.batch_size 
 
     def __getitem__(self, index):
+        """
+        # FOR DEBUGGING: print worker IDs
         worker_info = tdata.get_worker_info()
         worker_id = 0
         if worker_info:
                 worker_id = worker_info.id
         
-        pos, vel = next(btgs[worker_id])
-        
+        print(f"{worker_id=}")
+        """
+        pos, vel = next(self.tg)[:2]
+        init_pos, labels = self.brain.softmax_response(pos)
+        vel = vel[-1] # first velocity is a dummy velocity
+        # OBS! data is not set to device here, since allocating gpu-memory in parallel is
+        # non-trivial. Data should be put on correct device in training loop instead.
+        init_pos = torch.tensor(init_pos, dtype=torch.float32)
+        vel = torch.tensor(vel, dtype=torch.float32)
+        labels = torch.tensor(labels, dtype=torch.float32)
 
-        # Insert code similar to "Data generator" in notebook
-        # however, do it so that we do not need to load with seq_len=2, but rather seq_len=1...
-        # this will proly save some loading time!! 
-
-        return None
+        return (vel, init_pos), labels
 
 

@@ -1,2 +1,2 @@
 from .SorscherRNN import SorscherRNN
-# from .UnitPathIntegrator import UnitPathIntegrator
+from .UnitPathIntegrator import UnitPathIntegrator

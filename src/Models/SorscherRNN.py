@@ -9,7 +9,6 @@ class SorscherRNN(torch.nn.Module):
 
     def __init__(
         self,
-        input_size=2,
         Ng=4096,
         Np=512,
         weight_decay=1e-4,
@@ -17,7 +16,6 @@ class SorscherRNN(torch.nn.Module):
         **kwargs
     ):
         super(SorscherRNN, self).__init__(**kwargs)
-        self.input_size = input_size
         self.Ng, self.Np = Ng, Np
 
         # define network architecture
