@@ -67,6 +67,12 @@ class Brain:
 
         # cast to torch.tensor, use torch softmax func
         # and recast to numpy array
+        # PS! We do not need numerically stable softmax here
+        # i.e. lofSoftmax and exponent shifting by max element
+        # because its the labels, hence no log is performed.
+        # Also max shifting of negative distances where one
+        # where largest element is close to zero does not
+        # benefit from max-shifting.
         activity = torch.nn.functional.softmax(
             torch.tensor(-dists / (2 * self.sigma ** 2))
         , dim=-1).numpy()

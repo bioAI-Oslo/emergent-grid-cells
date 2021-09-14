@@ -45,6 +45,7 @@ class Dataset(torch.utils.data.Dataset):
         return self.nsteps * self.batch_size 
 
     def __getitem__(self, index):
+        """Note, 'index' is ignored. Assumes only getting single elements"""
         """
         # FOR DEBUGGING: print worker IDs
         worker_info = tdata.get_worker_info()
@@ -63,6 +64,6 @@ class Dataset(torch.utils.data.Dataset):
         vel = torch.tensor(vel, dtype=torch.float32)
         labels = torch.tensor(labels, dtype=torch.float32)
 
-        return (vel, init_pos), labels
+        return [[vel, init_pos], labels]
 
 
