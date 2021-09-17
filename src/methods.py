@@ -53,11 +53,12 @@ class Dataset(torch.utils.data.Dataset):
         if worker_info:
                 worker_id = worker_info.id
         
-        print(f"{worker_id=}")
+        print(f"{worker_id=}, {index=}")
         """
         pos, vel = next(self.tg)[:2]
-        init_pos, labels = self.brain.softmax_response(pos)
-        vel = vel[-1] # first velocity is a dummy velocity
+        pos = self.brain.softmax_response(pos)
+        init_pos, labels = pos[0], pos[1:]
+        vel = vel[1:] # first velocity is a dummy velocity
         # OBS! data is not set to device here, since allocating gpu-memory in parallel is
         # non-trivial. Data should be put on correct device in training loop instead.
         init_pos = torch.tensor(init_pos, dtype=torch.float32)

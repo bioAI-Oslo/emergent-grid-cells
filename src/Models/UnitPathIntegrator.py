@@ -23,6 +23,7 @@ class UnitPathIntegrator(torch.nn.Module):
         One recurrence step from p0 to p0 + v
         """
         v, p0 = inputs
+        v, p0 = v[:,0], p0[:,0] # removes empty seq_len dim
         v = self.velocity_encoder(v)
         p0 = self.init_position_encoder(p0)
         return torch.nn.functional.relu(self.recurrence(p0) + v)
@@ -45,6 +46,7 @@ class UnitPathIntegrator(torch.nn.Module):
         # rather than classic CE implementations assuming one-hot p(x).
         # Note! predictions have already undergone (numerically stable)
         # log().
+        labels = labels[:,0] # removes empty seq_len dim
         cross_entropy = torch.sum(-labels * predictions, axis=-1)
         l2_regularization = weight_decay + torch.sum(self.recurrence.weight ** 2)
         return torch.mean(cross_entropy) + l2_regularization
@@ -100,3 +102,4 @@ class UnitPathIntegrator(torch.nn.Module):
 
             if not (epoch % save_freq):
                 self.save(optimizer, loss_history, *args, **kwargs)
+        return loss_history
