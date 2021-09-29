@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.keras.layers import Dense, SimpleRNN
 
 
-class UnitPathIntegrator(tf.keras.Model):
+class UnitPathIntegratorTF(tf.keras.Model):
     """
     Specification of the SorscherRNN model -
     stripping the model down to the bone in an effort to probe
@@ -10,7 +10,7 @@ class UnitPathIntegrator(tf.keras.Model):
     """
 
     def __init__(self, Ng=4096, Np=512, weight_decay=1e-4, activation="relu", **kwargs):
-        super(UnitPathIntegrator, self).__init__(**kwargs)
+        super(UnitPathIntegratorTF, self).__init__(**kwargs)
         # define network architecture
         self.velocity_encoder = Dense(Ng, name="velocity_encoder", use_bias=False)
         
