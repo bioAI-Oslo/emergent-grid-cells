@@ -1,19 +1,16 @@
 import torch
 import tqdm
 
+from ratsimulator import trajectory_generator
+
+
 class SorscherRNN(torch.nn.Module):
     """
     Model based on:
     https://github.com/ganguli-lab/grid-pattern-formation/blob/master/model.py
     """
 
-    def __init__(
-        self,
-        Ng=4096,
-        Np=512,
-        nonlinearity="relu",
-        **kwargs
-    ):
+    def __init__(self, Ng=4096, Np=512, nonlinearity="relu", **kwargs):
         super(SorscherRNN, self).__init__(**kwargs)
         self.Ng, self.Np = Ng, Np
 
@@ -30,8 +27,26 @@ class SorscherRNN(torch.nn.Module):
         # Linear read-out weights
         self.decoder = torch.nn.Linear(Ng, Np, bias=False)
 
+    @property
+    def device(self):
+        return next(self.parameters()).device
+
+    @property
+    def dtype(self):
+        return next(self.parameters()).dtype
+
     def g(self, inputs):
         v, p0 = inputs
+        if len(v.shape) != 3:
+            # model requires tensor of degree 3 (B,S,N)
+            # assume inputs missing empty batch-dim
+            v, p0 = v[None], p0[None]
+
+        if self.device != v.device:
+            # put v and p0 on same device as model
+            v = v.to(self.device, dtype=self.dtype)
+            p0 = p0.to(self.device, dtype=self.dtype)
+
         p0 = self.init_position_encoder(p0)
         # return only final prediction in sequence
         out = self.RNN(v, p0[None])[0]
@@ -53,6 +68,8 @@ class SorscherRNN(torch.nn.Module):
         """
         # Actual cross entropy between two distributions p(x) and q(x),
         # rather than classic CE implementations assuming one-hot p(x).
+        if labels.device != self.device:
+            labels = labels.to(self.device, dtype=self.dtype)
         cross_entropy = torch.sum(-labels * predictions, axis=-1)
         l2_regularization = weight_decay + torch.sum(self.RNN.weight_hh_l0 ** 2)
         return torch.mean(cross_entropy) + l2_regularization
@@ -70,8 +87,6 @@ class SorscherRNN(torch.nn.Module):
         optimizer,
         weight_decay,
         nepochs,
-        device,
-        dtype=torch.float32,
         loaded_model=False,
         save_model=False,
         save_freq=1,
@@ -91,9 +106,6 @@ class SorscherRNN(torch.nn.Module):
             # generic torch training loop
             running_loss = 0.0
             for inputs, labels in trainloader:
-                inputs[0] = inputs[0].to(device, dtype=dtype)
-                inputs[1] = inputs[1].to(device, dtype=dtype)
-                labels = labels.to(device, dtype=dtype)
                 # zero the parameter gradients
                 optimizer.zero_grad()
                 # forward + backward + optimize
@@ -109,3 +121,4 @@ class SorscherRNN(torch.nn.Module):
             if not (epoch % save_freq):
                 self.save(optimizer, loss_history, *args, **kwargs)
         return loss_history
+

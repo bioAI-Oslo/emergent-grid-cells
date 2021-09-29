@@ -1,7 +1,10 @@
 import torch
-from ratsimulator import trajectory_generator 
+import matplotlib.pyplot as plt
+
+from ratsimulator import trajectory_generator
 import torch.utils.data as tdata
 from Brain import *
+
 
 def generic_train_loop(model, trainloader, optimizer, criterion, nepochs):
     loss_history = []
@@ -29,9 +32,8 @@ def generic_train_loop(model, trainloader, optimizer, criterion, nepochs):
     return model, loss_history
 
 
-
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, brain, batch_size=64, nsteps = 100, *args, **kwargs):
+    def __init__(self, brain, batch_size=64, nsteps=100, *args, **kwargs):
         self.tg = trajectory_generator(*args, **kwargs)
         self.brain = brain
         self.batch_size = batch_size
@@ -42,7 +44,7 @@ class Dataset(torch.utils.data.Dataset):
         Length of dataset. But since generated, set
         to a large fixed value.
         """
-        return self.nsteps * self.batch_size 
+        return self.nsteps * self.batch_size
 
     def __getitem__(self, index):
         """Note, 'index' is ignored. Assumes only getting single elements"""
@@ -58,7 +60,7 @@ class Dataset(torch.utils.data.Dataset):
         pos, vel = next(self.tg)[:2]
         pos = self.brain.softmax_response(pos)
         init_pos, labels = pos[0], pos[1:]
-        vel = vel[1:] # first velocity is a dummy velocity
+        vel = vel[1:]  # first velocity is a dummy velocity
         # OBS! data is not set to device here, since allocating gpu-memory in parallel is
         # non-trivial. Data should be put on correct device in training loop instead.
         init_pos = torch.tensor(init_pos, dtype=torch.float32)
@@ -68,3 +70,68 @@ class Dataset(torch.utils.data.Dataset):
         return [[vel, init_pos], labels]
 
 
+def grid_rate_map(
+    model,
+    environment,
+    dataset,
+    seq_len,
+    res=np.array([20, 20]),
+    idxs=slice(0, 64, 1),
+    num_samples=1,
+    *args,
+    **kwargs,
+):
+    board = environment.get_board(res)
+    num_response_maps = (idxs.stop - idxs.start) // idxs.step
+    response_maps = np.zeros((num_response_maps, *res))
+    count_maps = np.zeros((num_response_maps, *res))
+    dres = (environment.boxsize - environment.origo) / res
+
+    # Calculate grid cell responses
+    for n in range(num_samples := 1):
+        # sample 'same' positions multiple times at different head directions
+        angle0 = None  # None implies random sampled head direction
+        for i in range(board.shape[0]):
+            for j in range(board.shape[1]):
+                p0 = np.random.uniform(
+                    low=np.maximum(board[i, j] - dres / 2, environment.origo),
+                    high=np.minimum(board[i, j] + dres / 2, environment.boxsize),
+                )
+                p0 = p0[None]  # p0 needs shape=(1,2)
+                # reinitialise pytorch dataset generator
+                tg = trajectory_generator(
+                    environment=environment, seq_len=seq_len, angle0=angle0, p0=p0
+                )
+                dataset.tg = tg
+                # sample data from generator
+                inputs, labels = dataset[0]
+                # reintegrate positions from initial (cartesian) position and velocities
+                pos = np.cumsum(
+                    np.concatenate([p0, inputs[0].detach().numpy()]), axis=0
+                )
+
+                pos_idxs = (pos * res / np.array(environment.boxsize)).astype(int)
+                model_cell_response = model(inputs).detach().cpu().numpy()
+                response_maps[
+                    :, pos_idxs[:-1, 0], pos_idxs[:-1, 1]
+                ] += model_cell_response[0, :, idxs].T
+                count_maps[:, pos_idxs[:-1, 0], pos_idxs[:-1, 1]] += 1
+
+    rate_maps = response_maps / count_maps
+    return board, rate_maps, response_maps, count_maps
+
+
+def multicontourf(xx, yy, zz):
+    """plot multiple contourf plots on a grid"""
+    ncells = int(np.sqrt(zz.shape[0]))
+    fig, ax = plt.subplots(figsize=(10, 10), nrows=ncells, ncols=ncells, squeeze=False)
+
+    # plot response maps using contourf
+    for k in range(zz.shape[0]):
+        ax[k // ncells, k % ncells].axis("off")
+        # ax[int(k / ncells), k % ncells].set_aspect('equal')
+        ax[k // ncells, k % ncells].contourf(
+            xx, yy, zz[k], cmap="jet"
+        )
+    
+    return fig, ax
