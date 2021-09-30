@@ -110,7 +110,7 @@ def grid_rate_map(
                     np.concatenate([p0, inputs[0].detach().numpy()]), axis=0
                 )
 
-                pos_idxs = (pos * res / np.array(environment.boxsize)).astype(int)
+                pos_idxs = np.around((res-1) * pos / np.array(environment.boxsize)).astype(int)
                 model_cell_response = model(inputs).detach().cpu().numpy()
                 response_maps[
                     :, pos_idxs[:-1, 0], pos_idxs[:-1, 1]
