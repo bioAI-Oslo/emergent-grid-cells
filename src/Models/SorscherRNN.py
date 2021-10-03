@@ -69,7 +69,7 @@ class SorscherRNN(torch.nn.Module):
         Hence the negation at the start. When used to calculate KL:
         KL = CE - entropy
         """
-        return torch.mean(-torch.nan_to_num(torch.sum(labels * torch.log(labels), axis=-1)))
+        return torch.mean(-torch.sum(torch.nan_to_num(labels * torch.log(labels)), axis=-1))
 
     def KL(self, cross_entropy_value, entropy_value):
         return cross_entropy_value - entropy_value
@@ -88,7 +88,7 @@ class SorscherRNN(torch.nn.Module):
         if labels.device != self.device:
             labels = labels.to(self.device, dtype=self.dtype)
         cross_entropy = torch.sum(-labels * log_predictions, axis=-1)
-        l2_regularization = weight_decay + torch.sum(self.RNN.weight_hh_l0 ** 2)
+        l2_regularization = weight_decay * torch.sum(self.RNN.weight_hh_l0 ** 2)
         return torch.mean(cross_entropy) + l2_regularization
 
     def save(self, optimizer, loss_history, training_metrics, params, tag, path="../checkpoints/"):
