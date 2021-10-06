@@ -37,7 +37,7 @@ class SorscherRNN(torch.nn.Module):
 
     def g(self, inputs):
         v, p0 = inputs
-        if len(v.shape) != 3:
+        if len(v.shape) == 2 and len(p0.shape) == 1:
             # model requires tensor of degree 3 (B,S,N)
             # assume inputs missing empty batch-dim
             v, p0 = v[None], p0[None]
@@ -48,8 +48,10 @@ class SorscherRNN(torch.nn.Module):
             p0 = p0.to(self.device, dtype=self.dtype)
 
         p0 = self.init_position_encoder(p0)
-        # return only final prediction in sequence
-        out = self.RNN(v, p0[None])[0]
+        p0 = p0[None] # add dummy (unit) dim for number of stacked rnns (D)
+        # output of torch.RNN is a 2d-tuple. First element =>
+        # return_sequences=True (in tensorflow). Last element => False.
+        out, _ = self.RNN(v, p0)
         return out
 
     def forward(self, inputs, log_softmax=False):
