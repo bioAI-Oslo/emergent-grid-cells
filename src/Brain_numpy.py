@@ -78,7 +78,7 @@ class Brain:
         , dim=-1).numpy()
 
         if DoG:
-            activity = torch.nn.functional.softmax(
+            activity -= torch.nn.functional.softmax(
                 torch.tensor(-dists / (2 * surround_scale * self.sigma ** 2))
                 , dim=-1).numpy()
 

@@ -30,7 +30,7 @@ class Brain:
         activity = torch.nn.functional.softmax(-dists / (2 * self.sigma ** 2), dim=-1)
 
         if DoG:
-            activity = torch.nn.functional.softmax(-dists / (2 * surround_scale * self.sigma ** 2), dim=-1)
+            activity -= torch.nn.functional.softmax(-dists / (2 * surround_scale * self.sigma ** 2), dim=-1)
 
             # after DoG, activity is not a probability dist anymore
             # shift and rescale s.t it becomes a prob dist again.
