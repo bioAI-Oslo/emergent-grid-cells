@@ -30,7 +30,8 @@ class Brain:
             pos = pos.reshape(pos.shape[0] * pos.shape[1], pos.shape[-1])
 
         # distance to place cell center
-        dists = torch.cdist(pos, self.pcs, p=self.p, compute_mode=self.compute_mode)
+        # dists = torch.cdist(pos, self.pcs, p=self.p, compute_mode=self.compute_mode)
+        dists = torch.sum((pos[:,None] - self.pcs[None])**2, axis=-1)
         activity = torch.nn.functional.softmax(-dists / (2 * self.sigma ** 2), dim=-1)
 
         if self.DoG:
