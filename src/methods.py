@@ -117,7 +117,10 @@ def rate_map(
                 )
                 # assign activity to space (from environment coordinates to pixel-coordinates) 
                 pos_idxs = np.around((res-1) * pos / np.array(environment.boxsize)).astype(int)
-                model_cell_response = model(inputs).detach().cpu().numpy()
+                if model == 'labels':
+                    model_cell_response = labels.numpy()[None] # add empty-batch dim
+                else:
+                    model_cell_response = model(inputs).detach().cpu().numpy()
                 response_maps[
                     :, pos_idxs[:-1, 0], pos_idxs[:-1, 1]
                 ] += model_cell_response[0, :, idxs].T
@@ -142,3 +145,16 @@ def multicontourf(xx, yy, zz):
         )
     
     return fig, ax
+
+def multiimshow(zz):
+    """plot multiple imshow plots on a grid"""
+    ncells = int(np.sqrt(zz.shape[0]))
+    fig, ax = plt.subplots(figsize=(10, 10), nrows=ncells, ncols=ncells, squeeze=False)
+
+    # plot response maps using contourf
+    for k in range(zz.shape[0]):
+        ax[k // ncells, k % ncells].axis("off")
+        # ax[int(k / ncells), k % ncells].set_aspect('equal')
+        ax[k // ncells, k % ncells].imshow(zz[k], cmap='jet')
+    
+    return fig, ax 
