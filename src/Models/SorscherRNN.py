@@ -76,8 +76,8 @@ class SorscherRNN(torch.nn.Module):
     def KL(self, cross_entropy_value, entropy_value):
         return cross_entropy_value - entropy_value
          
-    def l2_reg(self):
-        return torch.sum(self.RNN.weight_hh_l0 ** 2)
+    def l2_reg(self, weight_decay):
+        return weight_decay * torch.sum(self.RNN.weight_hh_l0 ** 2)
 
     def loss_fn(self, log_predictions, labels, weight_decay):
         """
@@ -89,9 +89,7 @@ class SorscherRNN(torch.nn.Module):
         # rather than classic CE implementations assuming one-hot p(x).
         if labels.device != self.device:
             labels = labels.to(self.device, dtype=self.dtype)
-        cross_entropy = torch.sum(-labels * log_predictions, axis=-1)
-        l2_regularization = weight_decay * torch.sum(self.RNN.weight_hh_l0 ** 2)
-        return torch.mean(cross_entropy) + l2_regularization
+        return self.CE(log_predictions, labels) + self.l2_reg(weight_decay) 
 
     def save(self, optimizer, loss_history, training_metrics, params, tag, path="../checkpoints/"):
         model_name = type(self).__name__
