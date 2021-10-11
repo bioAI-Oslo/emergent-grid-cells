@@ -48,7 +48,7 @@ class SorscherRNN(torch.nn.Module):
             p0 = p0.to(self.device, dtype=self.dtype)
 
         p0 = self.init_position_encoder(p0)
-        p0 = p0[None] # add dummy (unit) dim for number of stacked rnns (D)
+        p0 = p0[None]  # add dummy (unit) dim for number of stacked rnns (D)
         # output of torch.RNN is a 2d-tuple. First element =>
         # return_sequences=True (in tensorflow). Last element => False.
         out, _ = self.RNN(v, p0)
@@ -64,18 +64,20 @@ class SorscherRNN(torch.nn.Module):
 
     def CE(self, log_predictions, labels):
         return torch.mean(-torch.sum(labels * log_predictions, axis=-1))
-        
+
     def entropy(self, labels):
         """
         The entropy. Note that entropy is a positive measure.
         Hence the negation at the start. When used to calculate KL:
         KL = CE - entropy
         """
-        return torch.mean(-torch.sum(torch.nan_to_num(labels * torch.log(labels)), axis=-1))
+        return torch.mean(
+            -torch.sum(torch.nan_to_num(labels * torch.log(labels)), axis=-1)
+        )
 
     def KL(self, cross_entropy_value, entropy_value):
         return cross_entropy_value - entropy_value
-         
+
     def l2_reg(self, weight_decay):
         return weight_decay * torch.sum(self.RNN.weight_hh_l0 ** 2)
 
@@ -89,9 +91,17 @@ class SorscherRNN(torch.nn.Module):
         # rather than classic CE implementations assuming one-hot p(x).
         if labels.device != self.device:
             labels = labels.to(self.device, dtype=self.dtype)
-        return self.CE(log_predictions, labels) + self.l2_reg(weight_decay) 
+        return self.CE(log_predictions, labels) + self.l2_reg(weight_decay)
 
-    def save(self, optimizer, loss_history, training_metrics, params, tag, path="../checkpoints/"):
+    def save(
+        self,
+        optimizer,
+        loss_history,
+        training_metrics,
+        params,
+        tag,
+        path="../checkpoints/",
+    ):
         model_name = type(self).__name__
         params["optimizer_state_dict"] = optimizer.state_dict()
         params["loss_history"] = loss_history
@@ -121,15 +131,15 @@ class SorscherRNN(torch.nn.Module):
         if loaded_model:
             start_epoch = save_freq * len(loss_history) + 1
         else:
-            training_metrics['CE'] = [] 
-            training_metrics['entropy'] = [] 
-            training_metrics['KL'] = [] 
-            training_metrics['l2_reg'] = [] 
+            training_metrics["CE"] = []
+            training_metrics["entropy"] = []
+            training_metrics["KL"] = []
+            training_metrics["l2_reg"] = []
         pbar = tqdm.tqdm(range(start_epoch, nepochs + 1))
         for epoch in pbar:
             # generic torch training loop
             running_loss = 0.0
-            running_ce, running_entropy, running_KL, running_l2_reg = 0,0,0,0
+            running_ce, running_entropy, running_KL, running_l2_reg = 0, 0, 0, 0
             for inputs, labels in trainloader:
                 # zero the parameter gradients
                 optimizer.zero_grad()
@@ -140,7 +150,7 @@ class SorscherRNN(torch.nn.Module):
                 optimizer.step()
                 running_loss += loss.item()
 
-                
+                # update training metrics
                 if labels.device != self.device:
                     labels = labels.to(self.device, dtype=self.dtype)
                 cross_entropy_value = self.CE(log_predictions, labels).item()
@@ -150,15 +160,14 @@ class SorscherRNN(torch.nn.Module):
                 running_KL += self.KL(cross_entropy_value, entropy_value)
                 running_l2_reg += self.l2_reg().item()
 
-
-            loss_history.append(running_loss / len(trainloader))
-            training_metrics['CE'].append(running_ce / len(trainloader))
-            training_metrics['entropy'].append(running_entropy / len(trainloader))
-            training_metrics['KL'].append(running_KL / len(trainloader))
-            training_metrics['l2_reg'].append(running_l2_reg / len(trainloader))
+            # update tqdm training-bar description
             pbar.set_description(f"Epoch={epoch}/{nepochs}, loss={loss_history[-1]}")
-
+            # add training metrics to training history
+            loss_history.append(running_loss / len(trainloader))
+            training_metrics["CE"].append(running_ce / len(trainloader))
+            training_metrics["entropy"].append(running_entropy / len(trainloader))
+            training_metrics["KL"].append(running_KL / len(trainloader))
+            training_metrics["l2_reg"].append(running_l2_reg / len(trainloader))
             if not (epoch % save_freq):
                 self.save(optimizer, loss_history, training_metrics, *args, **kwargs)
         return loss_history
-
