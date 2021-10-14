@@ -158,10 +158,8 @@ class SorscherRNN(torch.nn.Module):
                 running_ce += cross_entropy_value
                 running_entropy += entropy_value
                 running_KL += self.KL(cross_entropy_value, entropy_value)
-                running_l2_reg += self.l2_reg().item()
+                running_l2_reg += self.l2_reg(weight_decay).item()
 
-            # update tqdm training-bar description
-            pbar.set_description(f"Epoch={epoch}/{nepochs}, loss={loss_history[-1]}")
             # add training metrics to training history
             loss_history.append(running_loss / len(trainloader))
             training_metrics["CE"].append(running_ce / len(trainloader))
@@ -170,4 +168,6 @@ class SorscherRNN(torch.nn.Module):
             training_metrics["l2_reg"].append(running_l2_reg / len(trainloader))
             if not (epoch % save_freq):
                 self.save(optimizer, loss_history, training_metrics, *args, **kwargs)
+            # update tqdm training-bar description
+            pbar.set_description(f"Epoch={epoch}/{nepochs}, loss={loss_history[-1]}")
         return loss_history
