@@ -8,6 +8,7 @@ from ratsimulator import trajectory_generator
 class Dataset(torch.utils.data.Dataset):
     def __init__(
         self,
+        environment,
         place_cells,
         batch_size=64,
         seq_len=20,
@@ -15,6 +16,7 @@ class Dataset(torch.utils.data.Dataset):
         return_cartesian=False,
         **kwargs,
     ):
+        self.environment = environment
         self.place_cells = place_cells
         self.batch_size = batch_size
         self.seq_len = seq_len
