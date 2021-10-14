@@ -8,7 +8,6 @@ from ratsimulator import trajectory_generator
 class Dataset(torch.utils.data.Dataset):
     def __init__(
         self,
-        environment,
         place_cells,
         batch_size=64,
         seq_len=20,
@@ -16,7 +15,6 @@ class Dataset(torch.utils.data.Dataset):
         return_cartesian=False,
         **kwargs,
     ):
-        self.environment = environment
         self.place_cells = place_cells
         self.batch_size = batch_size
         self.seq_len = seq_len
@@ -143,3 +141,92 @@ def multiimshow(zz):
         ax[k // ncells, k % ncells].imshow(zz[k], cmap="jet")
 
     return fig, ax
+
+
+def _find_inner_circle_dist(sac, topk=10):
+    """
+    Helper function for grid_score()
+    Args:
+        sac: autocorrellogram
+        topk: number of peak transitions to look for (in any direction)
+    Returns:
+        robust_dist: robust (median) l2-dist to transition peaks from center
+        idxs: the idxs of the peaks used to calculate the (robust) dist to transition peaks
+    """
+    center_x = sac.shape[0] / 2
+    center_y = sac.shape[1] / 2
+    # smooth sac
+    smooth_sac = signal.correlate2d(
+        sac, np.array([[1, 2, 1], [2, 4, 2], [1, 2, 1]]), mode="same"
+    )
+    # differential filtering (could experiment with different filter widths for stability)
+    dx_sac = signal.correlate2d(
+        smooth_sac, np.array([[-1, -2, -1], [0, 0, 0], [1, 2, 1]]), mode="same"
+    )
+    dy_sac = signal.correlate2d(
+        smooth_sac, np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]), mode="same"
+    )
+    # double differentiantial filtering
+    dx2_sac = dx_sac = signal.correlate2d(
+        dx_sac, np.array([[-1, -2, -1], [0, 0, 0], [1, 2, 1]]), mode="same"
+    )
+    dy2_sac = signal.correlate2d(
+        dy_sac, np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]), mode="same"
+    )
+
+    # find peak transitions from center mass
+    idxs = np.argpartition((dx2_sac + dy2_sac).flatten(), -topk)[-topk:]
+    idxs = np.unravel_index(idxs, sac.shape)
+    idxs = np.stack(idxs, axis=-1)  # vectorize idxs
+    """
+    # plot points in transition plot (double-differentiated sac)
+    fig,ax = plt.subplots()
+    ax.imshow(dx2_sac + dy2_sac)
+    for idx in idxs:
+        ax.add_patch(plt.Circle(idx, 0.2, color='r'))
+    """
+    # calculate distances
+    center = np.array([center_x, center_y])
+    l2squared_to_center = np.sum((idxs - center) ** 2, axis=-1)
+    # choose distance
+    robust_dist = np.median(l2squared_to_center)
+    return robust_dist, idxs
+
+
+def _get_annulus_mask(sac):
+    """
+    Helper function for grid_score()
+    """
+    # get center coords and create ogrid
+    center_x = sac.shape[0] / 2
+    center_y = sac.shape[1] / 2
+    x, y = np.ogrid[0 : sac.shape[0], 0 : sac.shape[1]]
+    # create annulus mask (outer circle fills the square autocorrellogram)
+    outer_mask = (x - center_x) ** 2 + (y - center_y) ** 2 <= min(
+        center_x ** 2, center_y ** 2
+    )
+    inner_circle_dist, _ = find_inner_circle_dist(sac)  # automatic inner circle mask
+    inner_mask = (x - center_x) ** 2 + (y - center_y) ** 2 >= inner_circle_dist
+    return inner_mask * outer_mask
+
+
+def grid_score(rate_map):
+    """
+    Self-made grid-score function. Grid score is not standardized and thus,
+    different grid_score functions give varying results.
+    """
+    # autocorrelate
+    sac = signal.correlate2d(rate_map, rate_map, mode="full")
+    annulus_mask = get_annulus_mask(sac)
+    masked_sac = sac[annulus_mask]
+
+    # correlate with rotated sacs
+    angles = np.arange(30, 180, 30)
+    distributed_image_transform = lambda angle: np.corrcoef(
+        scipy.ndimage.rotate(sac, angle=angle, reshape=False)[annulus_mask].flatten(),
+        masked_sac.flatten(),
+    )[0, 1]
+    masked_rot_sacs = np.array([*map(distributed_image_transform, angles)])
+    phase60 = masked_rot_sacs[1::2]
+    phase30 = masked_rot_sacs[::2]
+    return np.min(phase60) - np.max(phase30)
