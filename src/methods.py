@@ -1,6 +1,8 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy import signal
+import scipy
 
 from ratsimulator import trajectory_generator
 
@@ -207,7 +209,7 @@ def _get_annulus_mask(sac):
     outer_mask = (x - center_x) ** 2 + (y - center_y) ** 2 <= min(
         center_x ** 2, center_y ** 2
     )
-    inner_circle_dist, _ = find_inner_circle_dist(sac)  # automatic inner circle mask
+    inner_circle_dist, _ = _find_inner_circle_dist(sac)  # automatic inner circle mask
     inner_mask = (x - center_x) ** 2 + (y - center_y) ** 2 >= inner_circle_dist
     return inner_mask * outer_mask
 
@@ -219,7 +221,7 @@ def grid_score(rate_map):
     """
     # autocorrelate
     sac = signal.correlate2d(rate_map, rate_map, mode="full")
-    annulus_mask = get_annulus_mask(sac)
+    annulus_mask = _get_annulus_mask(sac)
     masked_sac = sac[annulus_mask]
 
     # correlate with rotated sacs
