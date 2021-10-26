@@ -2,13 +2,20 @@
 
 ### Create and install Conda env from .yml file:
 ```console
-$ conda env create -f env.yml
+$ conda env create -f environment.yml
 ```
 
 ### Activate conda environment:
 ```console
 $ conda activate ml
 ```
+
+### Add anaconda environment to ipykernel:
+```console
+$ python -m ipykernel install --user --name=ml
+```
+Source:
+https://medium.com/@nrk25693/how-to-add-your-conda-environment-to-your-jupyter-notebook-in-just-4-steps-abeab8b8d084
 
 ### To update env.yml packages / Save a Conda environment (cross-platform compatible, with python version):
 ```console
