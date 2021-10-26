@@ -21,9 +21,9 @@ Taken from: https://github.com/deepmind/grid-cells/blob/master/scores.py
 """Grid score calculations.
 """
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+# from __future__ import absolute_import
+# from __future__ import division
+# from __future__ import print_function
 
 import math
 import matplotlib.pyplot as plt
