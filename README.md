@@ -17,7 +17,7 @@ $ python -m ipykernel install --user --name=ml
 Source:
 https://medium.com/@nrk25693/how-to-add-your-conda-environment-to-your-jupyter-notebook-in-just-4-steps-abeab8b8d084
 
-### To update env.yml packages / Save a Conda environment (cross-platform compatible, with python version):
+### To update environment.yml packages / Save a Conda environment (cross-platform compatible, with python version):
 ```console
-$ conda env export --from-history > env.yml
+$ conda env export --from-history > environment.yml
 ```
