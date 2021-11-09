@@ -26,6 +26,9 @@ class SorscherRNN(torch.nn.Module):
         )
         # Linear read-out weights
         self.decoder = torch.nn.Linear(Ng, Np, bias=False)
+        self.original_weights = []
+        self._rnnh_prune_mask = torch.ones((Ng, Ng), device=self.device)
+        self._rnni_prune_mask = torch.ones((Ng, 2), device=self.device)
 
     @property
     def device(self):
@@ -34,6 +37,45 @@ class SorscherRNN(torch.nn.Module):
     @property
     def dtype(self):
         return next(self.parameters()).dtype
+
+    @property
+    def prune_mask(self):
+        return [self._rnni_prune_mask, self._rnnh_prune_mask]
+
+    @prune_mask.setter
+    def prune_mask(self, idxs):
+        """
+        Set outgoing weights corresponding to output nodes at
+        idxs to zero in recurrent matrix - I.e. prune grid cells.
+        """
+        if not self.original_weights:
+            # save weights
+            self.original_weights = [
+                self.RNN.weight_ih_l0.clone(),
+                self.RNN.weight_hh_l0.clone(),
+            ]
+
+        # reset weights
+        self.RNN.weight_ih_l0, self.RNN.weight_hh_l0 = map(
+            lambda x: torch.nn.parameter.Parameter(x.clone()), self.original_weights
+        )
+        self._rnni_prune_mask, self._rnnh_prune_mask = (
+            torch.ones((self.Ng, 2), device=self.device),
+            torch.ones((self.Ng, self.Ng), device=self.device),
+        )
+
+        maski = torch.ones((self.Ng, 2), device=self.device)
+        maskh = torch.ones((self.Ng, self.Ng), device=self.device)
+        maski[idxs] = torch.zeros(2, device=self.device)
+        maskh[idxs] = torch.zeros(self.Ng, device=self.device)
+        self.RNN.weight_ih_l0 = torch.nn.parameter.Parameter(
+            self.RNN.weight_ih_l0 * maski
+        )
+        self.RNN.weight_hh_l0 = torch.nn.parameter.Parameter(
+            self.RNN.weight_hh_l0 * maskh
+        )
+        self._rnni_prune_mask = maski
+        self._rnnh_prune_mask = maskh
 
     def g(self, inputs):
         v, p0 = inputs
@@ -54,13 +96,17 @@ class SorscherRNN(torch.nn.Module):
         out, _ = self.RNN(v, p0)
         return out
 
-    def forward(self, inputs, log_softmax=False):
-        place_preds = self.decoder(self.g(inputs))
+    def p(self, g_inputs, log_softmax=False):
+        place_preds = self.decoder(g_inputs)
         return (
             torch.nn.functional.log_softmax(place_preds, dim=-1)
             if log_softmax
             else place_preds
         )
+
+    def forward(self, inputs, log_softmax=False):
+        gs = self.g(inputs)
+        return self.p(gs, log_softmax)
 
     def CE(self, log_predictions, labels):
         return torch.mean(-torch.sum(labels * log_predictions, axis=-1))
