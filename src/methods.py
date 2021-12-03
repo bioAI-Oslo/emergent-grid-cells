@@ -133,7 +133,7 @@ def save_obj(obj, pickle_object_path):
         pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
 
 
-def load_obj(pickle_object_path:
+def load_obj(pickle_object_path):
     with open(pickle_object_path + ".pkl", "rb") as f:
         return pickle.load(f)
 
