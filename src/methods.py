@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
 import scipy
+import pickle
 
 from ratsimulator import trajectory_generator
 
@@ -117,6 +118,24 @@ def rate_map(
 
     rate_maps = response_maps / count_maps
     return board, rate_maps, response_maps, count_maps
+
+
+def save_obj(obj, pickle_object_path):
+    """
+    taken from:
+    https://stackoverflow.com/questions/19201290/how-to-save-a-dictionary-to-a-file/32216025
+    https://stackoverflow.com/questions/12517451/automatically-creating-directories-with-file-output
+    """
+    import os
+    if not os.path.exists(os.path.dirname(pickle_object_path)):
+        os.makedirs(os.path.dirname(pickle_object_path))
+    with open(pickle_object_path + ".pkl", "wb") as f:
+        pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+
+
+def load_obj(pickle_object_path:
+    with open(pickle_object_path + ".pkl", "rb") as f:
+        return pickle.load(f)
 
 
 def multicontourf(xx, yy, zz):

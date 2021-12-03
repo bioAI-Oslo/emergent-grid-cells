@@ -29,6 +29,7 @@ class SorscherRNN(torch.nn.Module):
         self.original_weights = []
         self._rnnh_prune_mask = torch.ones((Ng, Ng), device=self.device)
         self._rnni_prune_mask = torch.ones((Ng, 2), device=self.device)
+        self._prune_mask_idxs = []
 
     @property
     def device(self):
@@ -41,6 +42,10 @@ class SorscherRNN(torch.nn.Module):
     @property
     def prune_mask(self):
         return [self._rnni_prune_mask, self._rnnh_prune_mask]
+
+    @property
+    def prune_mask_idxs(self):
+        return self._prune_mask_idxs
 
     @prune_mask.setter
     def prune_mask(self, idxs):
@@ -76,6 +81,7 @@ class SorscherRNN(torch.nn.Module):
         )
         self._rnni_prune_mask = maski
         self._rnnh_prune_mask = maskh
+        self._prune_mask_idxs = idxs
 
     def g(self, inputs):
         v, p0 = inputs

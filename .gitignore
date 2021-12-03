@@ -129,7 +129,4 @@ dmypy.json
 .pyre/
 
 .DS_Store
-/graveyard
-/notebooks/checkpoints
-/checkpoints
-/notebooks/graveyard
+graveyard
