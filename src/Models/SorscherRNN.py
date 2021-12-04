@@ -151,15 +151,13 @@ class SorscherRNN(torch.nn.Module):
         loss_history,
         training_metrics,
         params,
-        tag,
-        path="../checkpoints/",
+        checkpoint_path,
     ):
-        model_name = type(self).__name__
         params["optimizer_state_dict"] = optimizer.state_dict()
         params["loss_history"] = loss_history
         params["training_metrics"] = training_metrics
         params["model_state_dict"] = self.state_dict()
-        torch.save(params, path + model_name + "_" + tag)
+        torch.save(params, checkpoint_path)
 
     def train(
         self,
