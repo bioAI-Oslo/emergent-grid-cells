@@ -145,40 +145,24 @@ class SorscherRNN(torch.nn.Module):
             labels = labels.to(self.device, dtype=self.dtype)
         return self.CE(log_predictions, labels) + self.l2_reg(weight_decay)
 
-    def save(
-        self,
-        optimizer,
-        loss_history,
-        training_metrics,
-        params,
-        checkpoint_path,
-    ):
-        params["optimizer_state_dict"] = optimizer.state_dict()
-        params["loss_history"] = loss_history
-        params["training_metrics"] = training_metrics
-        params["model_state_dict"] = self.state_dict()
-        torch.save(params, checkpoint_path)
-
     def train(
         self,
         trainloader,
         optimizer,
         weight_decay,
         nepochs,
-        loaded_model=False,
-        save_model=False,
+        checkpoint_path,
+        params,
         save_freq=1,
         loss_history=[],
         training_metrics={},
-        *args,
-        **kwargs,
     ):
         """
         Modified generic train loop for sorscher rnn. Data is arbitrary
         large since it is generated and not a fixed set.
         """
         start_epoch = 1
-        if loaded_model:
+        if loss_history:
             start_epoch = save_freq * len(loss_history) + 1
         else:
             training_metrics["CE"] = []
@@ -216,8 +200,15 @@ class SorscherRNN(torch.nn.Module):
             training_metrics["entropy"].append(running_entropy / len(trainloader))
             training_metrics["KL"].append(running_KL / len(trainloader))
             training_metrics["l2_reg"].append(running_l2_reg / len(trainloader))
+
+            # save model training dynamics (model weight history)
             if not (epoch % save_freq):
-                self.save(optimizer, loss_history, training_metrics, *args, **kwargs)
+                params["optimizer_state_dict"] = optimizer.state_dict()
+                params["loss_history"] = loss_history
+                params["training_metrics"] = training_metrics
+                params["model_state_dict"] = self.state_dict()
+                torch.save(params, checkpoint_path / f"{epoch:04d}")
+
             # update tqdm training-bar description
             pbar.set_description(f"Epoch={epoch}/{nepochs}, loss={loss_history[-1]}")
         return loss_history
