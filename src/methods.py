@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
+from scipy import interpolate
 import scipy
 import pickle
 
@@ -16,7 +17,6 @@ class Dataset(torch.utils.data.Dataset):
         self.place_cells = place_cells
         self.seq_len = seq_len
         self.dataset_size = dataset_size
-        self.kwargs = kwargs
 
     def __len__(self):
         """
@@ -97,6 +97,45 @@ def multiimshow(zz):
         ax[k // ncells, k % ncells].imshow(zz[k], cmap="jet")
 
     return fig, ax
+
+
+def interpolate_missing_pixels(
+    image: np.ndarray, mask: np.ndarray, method: str = "cubic", fill_value: int = 0
+):
+    """
+    Taken from:
+    https://stackoverflow.com/questions/37662180/interpolate-missing-values-2d-python
+
+    :param image: a 2D image
+    :param mask: a 2D boolean image, True indicates missing values
+    :param method: interpolation method, one of
+        'nearest', 'linear', 'cubic'.
+    :param fill_value: which value to use for filling up data outside the
+        convex hull of known pixel values.
+        Default is 0, Has no effect for 'nearest'.
+    :return: the image with missing values interpolated
+    """
+    h, w = image.shape[:2]
+    xx, yy = np.meshgrid(np.arange(w), np.arange(h))
+
+    known_x = xx[~mask]
+    known_y = yy[~mask]
+    known_v = image[~mask]
+    missing_x = xx[mask]
+    missing_y = yy[mask]
+
+    interp_values = interpolate.griddata(
+        (known_x, known_y),
+        known_v,
+        (missing_x, missing_y),
+        method=method,
+        fill_value=fill_value,
+    )
+
+    interp_image = image.copy()
+    interp_image[missing_y, missing_x] = interp_values
+
+    return interp_image
 
 
 def _find_inner_circle_dist(sac, topk=10):
