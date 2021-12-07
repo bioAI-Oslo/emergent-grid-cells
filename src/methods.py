@@ -44,11 +44,11 @@ class Dataset(torch.utils.data.Dataset):
         velocities = torch.tensor(self.agent.velocities, dtype=torch.float32)[1:]
         positions = torch.tensor(self.agent.positions, dtype=torch.float32)
         pc_positions = self.place_cells.softmax_response(positions)
-        init_pc_positions, labels = pc_positions[0], pc_positions[:1]
+        init_pc_positions, labels = pc_positions[0], pc_positions[1:]
         return [[velocities, init_pc_positions], labels]
 
 
-def rate_maps(
+def compute_ratemaps(
     model,
     dataset,
     num_trajectories=1000,
