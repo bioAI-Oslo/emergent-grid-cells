@@ -71,32 +71,40 @@ def compute_ratemaps(
     )
 
 
-def multicontourf(xx, yy, zz):
+def multicontourf(xx, yy, zz, axs=None):
     """plot multiple contourf plots on a grid"""
-    ncells = int(np.sqrt(zz.shape[0]))
-    fig, ax = plt.subplots(figsize=(10, 10), nrows=ncells, ncols=ncells, squeeze=False)
+    if axs is None:
+        ncells = int(np.sqrt(zz.shape[0]))
+        fig, axs = plt.subplots(figsize=(10, 10), nrows=ncells, ncols=ncells, squeeze=False)
+    else:
+        fig = None
+        ncells = axs.shape[0]
 
     # plot response maps using contourf
     for k in range(zz.shape[0]):
-        ax[k // ncells, k % ncells].axis("off")
+        axs[k // ncells, k % ncells].axis("off")
         # ax[int(k / ncells), k % ncells].set_aspect('equal')
-        ax[k // ncells, k % ncells].contourf(xx, yy, zz[k], cmap="jet")
+        axs[k // ncells, k % ncells].contourf(xx, yy, zz[k], cmap="jet")
 
-    return fig, ax
+    return fig, axs
 
 
-def multiimshow(zz):
+def multiimshow(zz, axs=None):
     """plot multiple imshow plots on a grid"""
-    ncells = int(np.sqrt(zz.shape[0]))
-    fig, ax = plt.subplots(figsize=(10, 10), nrows=ncells, ncols=ncells, squeeze=False)
+    if axs is None:
+        ncells = int(np.sqrt(zz.shape[0]))
+        fig, axs = plt.subplots(figsize=(10, 10), nrows=ncells, ncols=ncells, squeeze=False)
+    else:
+        fig = None
+        ncells = axs.shape[0]
 
     # plot response maps using contourf
     for k in range(zz.shape[0]):
-        ax[k // ncells, k % ncells].axis("off")
+        axs[k // ncells, k % ncells].axis("off")
         # ax[int(k / ncells), k % ncells].set_aspect('equal')
-        ax[k // ncells, k % ncells].imshow(zz[k], cmap="jet")
+        axs[k // ncells, k % ncells].imshow(zz[k], cmap="jet")
 
-    return fig, ax
+    return fig, axs
 
 
 def interpolate_missing_pixels(
