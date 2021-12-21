@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import tqdm
 
 from ratsimulator import trajectory_generator
@@ -10,8 +11,11 @@ class SorscherRNN(torch.nn.Module):
     https://github.com/ganguli-lab/grid-pattern-formation/blob/master/model.py
     """
 
-    def __init__(self, Ng=4096, Np=512, nonlinearity="relu", **kwargs):
+    def __init__(
+        self, place_cell_ensembles, Ng=4096, Np=512, nonlinearity="relu", **kwargs
+    ):
         super(SorscherRNN, self).__init__(**kwargs)
+        self.place_cell_ensembles = place_cell_ensembles
         self.Ng, self.Np = Ng, Np
 
         # define network architecture
@@ -26,10 +30,30 @@ class SorscherRNN(torch.nn.Module):
         )
         # Linear read-out weights
         self.decoder = torch.nn.Linear(Ng, Np, bias=False)
+
+        # initialise model weights
+        for param in self.parameters():
+            torch.nn.init.xavier_uniform_(param.data, gain=1.0)
+
+        # pruning
         self.original_weights = []
         self._rnnh_prune_mask = torch.ones((Ng, Ng), device=self.device)
         self._rnni_prune_mask = torch.ones((Ng, 2), device=self.device)
         self._prune_mask_idxs = []
+
+    def to(self, device=None, *args, **kwargs):
+        """Overwrites: To also add place_cells on same device"""
+        # copy place cells before putting on gpu to not conflict with dataloader
+        # which uses cpu
+        import copy
+
+        self.place_cell_ensembles = [
+            copy.copy(place_cells) for place_cells in self.place_cell_ensembles
+        ]
+        if device is not None:
+            for i, place_cells in enumerate(self.place_cell_ensembles):
+                self.place_cell_ensembles[i].pcs = place_cells.pcs.to(device)
+        return super(SorscherRNN, self).to(device, *args, **kwargs)
 
     @property
     def device(self):
@@ -145,6 +169,39 @@ class SorscherRNN(torch.nn.Module):
             labels = labels.to(self.device, dtype=self.dtype)
         return self.CE(log_predictions, labels) + self.l2_reg(weight_decay)
 
+    def position_error(self, preds, labels, positions, indices):
+        batch_size = labels.shape[0]
+        pred_error, true_error = 0, 0
+        for env_i, place_cells in enumerate(self.place_cell_ensembles):
+            mask_i = np.array(indices) == env_i
+            decoded_pred_pos = place_cells.to_euclid(preds[mask_i])
+            decoded_true_pos = place_cells.to_euclid(labels[mask_i])
+            # sum over patchy-batch dim (mean after loop), mean over seq_len dim,
+            # "sum" (euclidean) over spatial dim
+            pred_error = torch.sum(
+                torch.mean(
+                    torch.sqrt(
+                        torch.sum(
+                            (decoded_pred_pos - positions[mask_i, 1:]) ** 2, axis=-1
+                        )
+                    ),
+                    axis=-1,
+                )
+            )
+            true_error = torch.sum(
+                torch.mean(
+                    torch.sqrt(
+                        torch.sum(
+                            (decoded_true_pos - positions[mask_i, 1:]) ** 2, axis=-1
+                        )
+                    ),
+                    axis=-1,
+                )
+            )
+        pred_error /= batch_size
+        true_error /= batch_size
+        return pred_error, true_error
+
     def train(
         self,
         trainloader,
@@ -153,7 +210,89 @@ class SorscherRNN(torch.nn.Module):
         nepochs,
         checkpoint_path,
         params,
-        save_freq=1,
+        loss_history=[],
+        training_metrics={},
+    ):
+        start_epoch = 1
+        if loss_history:
+            start_epoch = len(loss_history)
+        else:
+            training_metrics["CE"] = []
+            training_metrics["entropy"] = []
+            training_metrics["KL"] = []
+            training_metrics["l2_reg"] = []
+            training_metrics["pred_error"] = []
+            training_metrics["true_error"] = []
+
+        save_iter = 0
+        pbar = tqdm.tqdm(range(start_epoch, nepochs + 1))
+        for epoch in pbar:
+            # generic torch training loop
+            running_loss = 0.0
+            running_ce, running_entropy, running_KL, running_l2_reg = 0, 0, 0, 0
+            running_pred_error, running_true_error = 0, 0
+            for inputs, labels, positions, indices in trainloader:
+                # zero the parameter gradients
+                optimizer.zero_grad()
+                # forward + backward + optimize
+                log_predictions = self(inputs, log_softmax=True)
+                loss = self.loss_fn(log_predictions, labels, weight_decay)
+                loss.backward()
+                optimizer.step()
+                running_loss += loss.item()
+
+                # update training metrics
+                labels = labels.to(self.device, dtype=self.dtype)
+                positions = positions.to(self.device, dtype=self.dtype)
+                pred_error, true_error = self.position_error(
+                    log_predictions, labels, positions, indices
+                )
+                cross_entropy_value = self.CE(log_predictions, labels).item()
+                entropy_value = self.entropy(labels).item()
+                running_ce += cross_entropy_value
+                running_entropy += entropy_value
+                running_KL += self.KL(cross_entropy_value, entropy_value)
+                running_l2_reg += self.l2_reg(weight_decay).item()
+                running_pred_error += pred_error
+                running_true_error += true_error
+
+            # add training metrics to training history
+            loss_history.append(running_loss / len(trainloader))
+            training_metrics["CE"].append(running_ce / len(trainloader))
+            training_metrics["entropy"].append(running_entropy / len(trainloader))
+            training_metrics["KL"].append(running_KL / len(trainloader))
+            training_metrics["l2_reg"].append(running_l2_reg / len(trainloader))
+            training_metrics["pred_error"].append(running_pred_error / len(trainloader))
+            training_metrics["true_error"].append(running_true_error / len(trainloader))
+
+            save_iter += 1
+            # save model training dynamics (model weight history)
+            if save_iter >= int(np.sqrt(epoch)):
+                # save frequency gets sparser (sqrt) with training
+                params["optimizer_state_dict"] = optimizer.state_dict()
+                params["loss_history"] = loss_history
+                params["training_metrics"] = training_metrics
+                params["model_state_dict"] = self.state_dict()
+                torch.save(params, checkpoint_path / f"{epoch:04d}")
+                save_iter = 0
+
+            # update tqdm training-bar description
+            pbar.set_description(
+                f"Epoch={epoch}/{nepochs}, loss={loss_history[-1]}, decoding_error(pred/true)={training_metrics['pred_error']}/{training_metrics['true_error']}"
+            )
+        return loss_history
+
+    def train_old(
+        self,
+        trainloader,
+        optimizer,
+        weight_decay,
+        nepochs,
+        checkpoint_path,
+        params,
+        save_freq1=1,
+        save_freq2=10,
+        epoch_to_change_save_freq=100,
         loss_history=[],
         training_metrics={},
     ):
@@ -163,7 +302,15 @@ class SorscherRNN(torch.nn.Module):
         """
         start_epoch = 1
         if loss_history:
-            start_epoch = save_freq * len(loss_history) + 1
+            start_epoch = (
+                save_freq1 * min(len(loss_history), epoch_to_change_save_freq)
+                + save_freq2
+                * (
+                    max(len(loss_history), epoch_to_change_save_freq)
+                    - epoch_to_change_save_freq
+                )
+                + 1
+            )
         else:
             training_metrics["CE"] = []
             training_metrics["entropy"] = []
@@ -202,7 +349,9 @@ class SorscherRNN(torch.nn.Module):
             training_metrics["l2_reg"].append(running_l2_reg / len(trainloader))
 
             # save model training dynamics (model weight history)
-            if not (epoch % save_freq):
+            if ((not (epoch % save_freq1)) and epoch < epoch_to_change_save_freq) or (
+                (not (epoch % save_freq2)) and epoch > epoch_to_change_save_freq
+            ):
                 params["optimizer_state_dict"] = optimizer.state_dict()
                 params["loss_history"] = loss_history
                 params["training_metrics"] = training_metrics
