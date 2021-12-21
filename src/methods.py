@@ -9,41 +9,73 @@ import pickle
 from ratsimulator import Agent
 
 
-class Dataset(torch.utils.data.Dataset):
+class Dataset_old(torch.utils.data.Dataset):
     def __init__(
-        self, environment, place_cells, seq_len=20, dataset_size=int(1e6), **kwargs,
+        self,
+        environments,
+        place_cell_ensembles,
+        seq_len=20,
+        dataset_size=int(1e6),
+        **kwargs,
     ):
-        self.agent = Agent(environment, **kwargs)
-        self.place_cells = place_cells
+        # Dataset can use multiple environments/place cell ensembles. If only one of each,
+        # encapsulate in lists to comply with class logic.
+        self.environments = (
+            environments if isinstance(environments, list) else [environments]
+        )
+        self.agents = [
+            Agent(environment, **kwargs) for environment in self.environments
+        ]
+        self.place_cell_ensembles = (
+            place_cell_ensembles
+            if isinstance(place_cell_ensembles, list)
+            else [place_cell_ensembles]
+        )
+        self.num_environments = len(self.place_cell_ensembles)
+
         self.seq_len = seq_len
         self.dataset_size = dataset_size
 
     def __len__(self):
         """
-        Define size of an epoch. Since dataset is generated this number
+        Define number of samples in dataset. Since dataset is generated this number
         can be chosen arbitrarily.
         """
         return self.dataset_size
+
+    def get_place_cells(self, index):
+        """
+        A data sample depends on a particular place cell basis - retrieve this
+        basis, given the dataset index.
+        """
+        return self.place_cell_ensembles[index % self.num_environments]
 
     def __getitem__(self, index):
         """
         Get a training (input & label) sample from the dataset.
 
-        Note! 'index' is ignored since dataset is generated.
+        Note! 'index' normally indexes the dataset, but not here since the
+        dataset is generated. The index is however used, for determining
+        which PlaceCells object basis to convert to.
 
         Note2! Other quantities (e.g. euclidean positions) can be
         access by for example - all as np.arrays!:
         dataset[0]
         dataset.agent.positions
         """
-        self.agent.reset()
+        # select agent/place cell basis (environment) uniformly across mini-batch
+        # samples chosen depending on 'index'
+        agent = self.agents[index % self.num_environments]
+        place_cells = self.place_cell_ensembles[index % self.num_environments]
+
+        agent.reset()
         for _ in range(self.seq_len):
-            self.agent.step()
+            agent.step()
 
         # Cast positions (in pc-basis) and velocities to tf.tensors
-        velocities = torch.tensor(self.agent.velocities, dtype=torch.float32)[1:]
-        positions = torch.tensor(self.agent.positions, dtype=torch.float32)
-        pc_positions = self.place_cells.softmax_response(positions)
+        velocities = torch.tensor(agent.velocities[1:], dtype=torch.float32)
+        positions = torch.tensor(agent.positions, dtype=torch.float32)
+        pc_positions = place_cells.softmax_response(positions)
         init_pc_positions, labels = pc_positions[0], pc_positions[1:]
         return [[velocities, init_pc_positions], labels]
 
@@ -59,8 +91,8 @@ def compute_ratemaps(
     activities, x, y = [], [], []
     for _ in range(num_trajectories):
         activities.append(model(dataset[0][0])[0, :, idxs].detach().cpu().numpy())
-        x.append(dataset.agent.positions[1:, 0])
-        y.append(dataset.agent.positions[1:, 1])
+        x.append(dataset.agents[0].positions[1:, 0])
+        y.append(dataset.agents[0].positions[1:, 1])
     activities = np.array(activities)
     return scipy.stats.binned_statistic_2d(
         np.ravel(x),
@@ -75,7 +107,9 @@ def multicontourf(xx, yy, zz, axs=None):
     """plot multiple contourf plots on a grid"""
     if axs is None:
         ncells = int(np.sqrt(zz.shape[0]))
-        fig, axs = plt.subplots(figsize=(10, 10), nrows=ncells, ncols=ncells, squeeze=False)
+        fig, axs = plt.subplots(
+            figsize=(10, 10), nrows=ncells, ncols=ncells, squeeze=False
+        )
     else:
         fig = None
         ncells = axs.shape[0]
@@ -93,7 +127,9 @@ def multiimshow(zz, axs=None):
     """plot multiple imshow plots on a grid"""
     if axs is None:
         ncells = int(np.sqrt(zz.shape[0]))
-        fig, axs = plt.subplots(figsize=(10, 10), nrows=ncells, ncols=ncells, squeeze=False)
+        fig, axs = plt.subplots(
+            figsize=(10, 10), nrows=ncells, ncols=ncells, squeeze=False
+        )
     else:
         fig = None
         ncells = axs.shape[0]
