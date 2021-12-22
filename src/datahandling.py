@@ -36,7 +36,7 @@ class MESampler(torch.utils.data.Sampler[int]):
 
     def __iter__(self):
         def me_generator():
-            while True:
+            for _ in range(len(self)):
                 environment_idx = self.step_counter % self.num_environments
                 self.step_counter += 1
                 yield environment_idx
