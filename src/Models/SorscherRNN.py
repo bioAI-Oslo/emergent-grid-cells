@@ -43,8 +43,7 @@ class SorscherRNN(torch.nn.Module):
 
     def to(self, device=None, *args, **kwargs):
         """Overwrites: To also add place_cells on same device"""
-        # copy place cells before putting on gpu to not conflict with dataloader
-        # which uses cpu
+        # copy place cells before putting on gpu avoid conflict with dataloader
         import copy
 
         self.place_cell_ensembles = [
@@ -253,8 +252,8 @@ class SorscherRNN(torch.nn.Module):
                 running_entropy += entropy_value
                 running_KL += self.KL(cross_entropy_value, entropy_value)
                 running_l2_reg += self.l2_reg(weight_decay).item()
-                running_pred_error += pred_error
-                running_true_error += true_error
+                running_pred_error += pred_error.item()
+                running_true_error += true_error.item()
 
             # add training metrics to training history
             loss_history.append(running_loss / len(trainloader))
@@ -267,7 +266,7 @@ class SorscherRNN(torch.nn.Module):
 
             save_iter += 1
             # save model training dynamics (model weight history)
-            if save_iter >= int(np.sqrt(epoch)):
+            if save_iter >= int(np.sqrt(epoch)) or epoch == nepochs:
                 # save frequency gets sparser (sqrt) with training
                 params["optimizer_state_dict"] = optimizer.state_dict()
                 params["loss_history"] = loss_history
@@ -278,7 +277,7 @@ class SorscherRNN(torch.nn.Module):
 
             # update tqdm training-bar description
             pbar.set_description(
-                f"Epoch={epoch}/{nepochs}, loss={loss_history[-1]}, decoding_error(pred/true)={training_metrics['pred_error']}/{training_metrics['true_error']}"
+                f"Epoch={epoch}/{nepochs}, loss={loss_history[-1]}, decoding_error(pred/true)={training_metrics['pred_error'][-1]}/{training_metrics['true_error'][-1]}"
             )
         return loss_history
 
