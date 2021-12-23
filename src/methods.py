@@ -32,7 +32,7 @@ def compute_ratemaps(
     )
 
 
-def multicontourf(xx, yy, zz, axs=None):
+def multicontourf(xx, yy, zz, titles=None, axs=None):
     """plot multiple contourf plots on a grid"""
     if axs is None:
         ncells = int(np.sqrt(zz.shape[0]))
@@ -45,30 +45,41 @@ def multicontourf(xx, yy, zz, axs=None):
 
     # plot response maps using contourf
     for k in range(zz.shape[0]):
-        axs[k // ncells, k % ncells].axis("off")
-        # ax[int(k / ncells), k % ncells].set_aspect('equal')
-        axs[k // ncells, k % ncells].contourf(xx, yy, zz[k], cmap="jet")
+        ax = axs[k // ncells, k % ncells]
+        ax.axis("off")
+        if titles is not None:
+            ax.set_title(f"{titles[k]}")
+        # ax.set_aspect('equal')
+        ax.contourf(xx, yy, zz[k], cmap="jet")
 
     return fig, axs
 
 
-def multiimshow(zz, axs=None):
+def multiimshow(zz, axs=None, titles=None, figsize=(10, 12), **kwargs):
     """plot multiple imshow plots on a grid"""
     if axs is None:
         ncells = int(np.sqrt(zz.shape[0]))
         fig, axs = plt.subplots(
-            figsize=(10, 10), nrows=ncells, ncols=ncells, squeeze=False
+            nrows=ncells,
+            ncols=ncells,
+            figsize=figsize,
+            squeeze=False,
+            constrained_layout=True,
+            **kwargs,
         )
+        fig.set_constrained_layout_pads(w_pad=0.02, h_pad=0.02)
     else:
         fig = None
         ncells = axs.shape[0]
 
     # plot response maps using contourf
     for k in range(zz.shape[0]):
-        axs[k // ncells, k % ncells].axis("off")
-        # ax[int(k / ncells), k % ncells].set_aspect('equal')
-        axs[k // ncells, k % ncells].imshow(zz[k], cmap="jet")
-
+        ax = axs[k // ncells, k % ncells]
+        ax.imshow(zz[k], cmap="jet")
+        ax.axis("off")
+        if titles is not None:
+            ax.set_title(f"{titles[k]}")
+        ax.set_aspect("auto")
     return fig, axs
 
 
