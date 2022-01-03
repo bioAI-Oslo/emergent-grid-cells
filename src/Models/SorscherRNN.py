@@ -208,7 +208,6 @@ class SorscherRNN(torch.nn.Module):
         weight_decay,
         nepochs,
         checkpoint_path,
-        params,
         loss_history=[],
         training_metrics={},
     ):
@@ -268,15 +267,17 @@ class SorscherRNN(torch.nn.Module):
             # save model training dynamics (model weight history)
             if save_iter >= int(np.sqrt(epoch)) or epoch == nepochs:
                 # save frequency gets sparser (sqrt) with training
-                params["optimizer_state_dict"] = optimizer.state_dict()
-                params["loss_history"] = loss_history
-                params["training_metrics"] = training_metrics
-                params["model_state_dict"] = self.state_dict()
-                torch.save(params, checkpoint_path / f"{epoch:04d}")
+                save_dict = {}
+                save_dict["optimizer_state_dict"] = optimizer.state_dict()
+                save_dict["loss_history"] = loss_history
+                save_dict["training_metrics"] = training_metrics
+                save_dict["model_state_dict"] = self.state_dict()
+                torch.save(save_dict, checkpoint_path / f"{epoch:04d}")
                 save_iter = 0
 
             # update tqdm training-bar description
             pbar.set_description(
                 f"Epoch={epoch}/{nepochs}, loss={loss_history[-1]}, decoding_error(pred/true)={training_metrics['pred_error'][-1]}/{training_metrics['true_error'][-1]}"
             )
-        return loss_history
+        return loss_history, training_metrics
+
