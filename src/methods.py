@@ -9,6 +9,13 @@ import pickle
 from ratsimulator import Agent
 
 
+def filenames(path):
+    """Return (sorted) names of all files in given path"""
+    fnames = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+    fnames.sort()
+    return fnames
+
+
 def compute_ratemaps(
     model,
     dataset,
