@@ -48,10 +48,10 @@ class MESampler(torch.utils.data.Sampler[int]):
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(
-        self, agents, place_cell_ensembles, num_samples, seq_len=20, **kwargs
+        self, agents, pc_ensembles, num_samples, seq_len=20, **kwargs
     ):
         self.agents = agents
-        self.place_cell_ensembles = place_cell_ensembles
+        self.pc_ensembles = pc_ensembles
         self.seq_len = seq_len
         self.num_samples = num_samples
 
@@ -60,7 +60,7 @@ class Dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         agent = self.agents[index]
-        place_cells = self.place_cell_ensembles[index]
+        place_cells = self.pc_ensembles[index]
         agent.reset()
         for _ in range(self.seq_len):
             agent.step()
