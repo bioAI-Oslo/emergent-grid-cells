@@ -16,13 +16,8 @@ class Experiment:
 
         self._set_pathing(base_path)
         # if experiment folder already exists - experiment should be loaded, otherwise created
-        self.new_experiment = os.path.exists(self.paths["experiment"])
-        if self.new_experiment:
-            print(
-                f"Experiment <{self.name}> already EXISTS. Loading experiment settings!"
-            )
-            self._load_experiment()
-        else:
+        self.is_new_experiment = not os.path.exists(self.paths["experiment"])
+        if self.is_new_experiment:
             print(
                 f"Experiment <{self.name}> is NEW. Loading DEFAULT experiment settings!"
             )
@@ -30,6 +25,11 @@ class Experiment:
             print(
                 "Default <params>, <environments>, <agents> and <pc_ensembles> can now be changed. Finish setup by calling setup()"
             )
+        else:
+            print(
+                f"Experiment <{self.name}> already EXISTS. Loading experiment settings!"
+            )
+            self._load_experiment()
 
     def _set_pathing(self, base_path):
         self.paths = {}
@@ -107,7 +107,7 @@ class Experiment:
             self.pc_ensembles = pickle.load(f)
 
     def setup(self):
-        if self.new_experiment:
+        if not self.is_new_experiment:
             print("This experiment has ALREADY been setup - SKIPPING.")
             return False
 
@@ -115,6 +115,9 @@ class Experiment:
         for path in self.paths.values():
             if not os.path.exists(path):
                 os.makedirs(path)
+        for env_i in range(len(self.environments)):
+            os.makedirs(self.paths["dynamics"] / f"env_{env_i}")
+            os.makedirs(self.paths["ratemaps"] / f"env_{env_i}")
 
         print("Saving experiment details")
         with open(self.paths["experiment"] / "params.pkl", "wb") as f:
