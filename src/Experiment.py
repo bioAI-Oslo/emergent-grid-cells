@@ -3,6 +3,7 @@ from pathlib import Path
 import datetime
 
 import numpy as np
+import torch
 import pickle
 
 import ratsimulator
@@ -94,6 +95,12 @@ class Experiment:
                 seed=0,
             )
         ]
+        # overload place cell layout with sorscher's sampled pc layout
+        self.pc_ensembles[0].pcs = torch.tensor(
+            np.load(self.paths["project"] / "example_pc_centers.npy") + 1.1,
+            dtype=torch.float32,
+        )
+        self.pc_ensembles[0].seed = "sorsher loaded place cells"
 
     def _load_experiment(self):
         print("Loading experiment details")
