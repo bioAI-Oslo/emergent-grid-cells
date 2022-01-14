@@ -5,19 +5,19 @@ import torch
 class CLSampler(torch.utils.data.Sampler):
     """Continual Learning Sampler"""
 
-    def __init__(self, num_environments, num_samples, **kwargs):
+    def __init__(self, num_environments, num_samples, num_epochs, **kwargs):
         self.num_samples = num_samples
-        self.sample_counter = -1
-        self.samples_per_environment = num_samples / num_environments
+        self.num_environments = num_environments
+        self.num_epochs = num_epochs
+        self.epoch_counter = -1
+        self.epochs_per_environment = num_epochs / num_environments
 
     def __iter__(self):
         def cl_generator():
-            for _ in range(len(self)):
-                if self.sample_counter == self.num_samples - 1:
-                    self.sample_counter = -1
-                self.sample_counter += 1
+            self.epoch_counter += 1
+            for sample_i in range(len(self)):
                 current_environment_idx = int(
-                    self.sample_counter // self.samples_per_environment
+                    self.epoch_counter // self.epochs_per_environment
                 )
                 yield current_environment_idx
         return cl_generator()
@@ -70,3 +70,12 @@ class Dataset(torch.utils.data.Dataset):
         pc_positions = place_cells.softmax_response(positions)
         init_pc_positions, labels = pc_positions[0], pc_positions[1:]
         return [[velocities, init_pc_positions], labels, positions, index]
+
+
+if __name__ == '__main__':
+    num_epochs = 5
+    clsampler = CLSampler(num_environments=3, num_samples = 10, num_epochs = num_epochs)
+    for epoch in range(num_epochs):
+        for env_i in clsampler:
+            print(env_i)
+
