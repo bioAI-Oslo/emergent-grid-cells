@@ -211,10 +211,8 @@ class SorscherRNN(torch.nn.Module):
         loss_history=[],
         training_metrics={},
     ):
-        start_epoch = 1
-        if loss_history:
-            start_epoch = len(loss_history)
-        else:
+        start_epoch = len(loss_history)
+        if start_epoch == 0:
             training_metrics["CE"] = []
             training_metrics["entropy"] = []
             training_metrics["KL"] = []
@@ -222,8 +220,8 @@ class SorscherRNN(torch.nn.Module):
             training_metrics["pred_error"] = []
             training_metrics["true_error"] = []
 
-        save_iter = 0
-        pbar = tqdm.tqdm(range(start_epoch, nepochs + 1))
+        # save_iter = 0
+        pbar = tqdm.tqdm(range(start_epoch, nepochs))
         for epoch in pbar:
             # generic torch training loop
             running_loss = 0.0
@@ -263,17 +261,19 @@ class SorscherRNN(torch.nn.Module):
             training_metrics["pred_error"].append(running_pred_error / len(trainloader))
             training_metrics["true_error"].append(running_true_error / len(trainloader))
 
-            save_iter += 1
+            # save_iter += 1
+            # if save_iter >= int(np.sqrt(epoch)) or epoch == nepochs:
+            #    save frequency gets sparser (sqrt) with training
+            #    save_iter = 0
+
             # save model training dynamics (model weight history)
-            if save_iter >= int(np.sqrt(epoch)) or epoch == nepochs:
-                # save frequency gets sparser (sqrt) with training
+            if not (epoch % 10) or epoch == (nepochs - 1):
                 save_dict = {}
                 save_dict["optimizer_state_dict"] = optimizer.state_dict()
                 save_dict["loss_history"] = loss_history
                 save_dict["training_metrics"] = training_metrics
                 save_dict["model_state_dict"] = self.state_dict()
                 torch.save(save_dict, checkpoint_path / f"{epoch:04d}")
-                save_iter = 0
 
             # update tqdm training-bar description
             pbar.set_description(
