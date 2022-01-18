@@ -6,6 +6,8 @@ from scipy import interpolate
 import scipy
 import pickle
 
+import os
+
 from ratsimulator import Agent
 
 
