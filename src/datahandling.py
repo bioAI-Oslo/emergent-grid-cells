@@ -5,21 +5,21 @@ import torch
 class CLSampler(torch.utils.data.Sampler):
     """Continual Learning Sampler"""
 
-    def __init__(self, num_environments, num_samples, **kwargs):
+    def __init__(self, num_environments, num_samples, num_epochs, **kwargs):
         self.num_samples = num_samples
-        self.sample_counter = -1
-        self.samples_per_environment = num_samples / num_environments
+        self.num_environments = num_environments
+        self.num_epochs = num_epochs
+        self.epoch_counter = 0
+        self.epochs_per_environment = num_epochs / num_environments
 
     def __iter__(self):
         def cl_generator():
-            for _ in range(len(self)):
-                if self.sample_counter == self.num_samples - 1:
-                    self.sample_counter = -1
-                self.sample_counter += 1
+            for sample_i in range(len(self)):
                 current_environment_idx = int(
-                    self.sample_counter // self.samples_per_environment
+                    self.epoch_counter // self.epochs_per_environment
                 )
                 yield current_environment_idx
+            self.epoch_counter += 1
         return cl_generator()
 
     def __len__(self):
@@ -32,13 +32,11 @@ class MESampler(torch.utils.data.Sampler[int]):
     def __init__(self, num_environments, num_samples, **kwargs):
         self.num_environments = num_environments
         self.num_samples = num_samples
-        self.step_counter = 0
 
     def __iter__(self):
         def me_generator():
-            for _ in range(len(self)):
-                environment_idx = self.step_counter % self.num_environments
-                self.step_counter += 1
+            for sample_idx in range(len(self)):
+                environment_idx = sample_idx % self.num_environments
                 yield environment_idx
         return me_generator()
 
@@ -70,3 +68,24 @@ class Dataset(torch.utils.data.Dataset):
         pc_positions = place_cells.softmax_response(positions)
         init_pc_positions, labels = pc_positions[0], pc_positions[1:]
         return [[velocities, init_pc_positions], labels, positions, index]
+
+
+if __name__ == '__main__':
+    print("Continual Learning Sampler test")
+    num_epochs = 5
+    num_environments, num_samples = 3, 10
+    clsampler = CLSampler(num_environments=num_environments, num_samples = num_samples, num_epochs = num_epochs)
+    i = 0
+    for epoch in range(num_epochs):
+        for env_i in clsampler:
+            print(i, env_i)
+            i+=1
+
+    print("Multi Environment Sampler test")
+    mesampler = MESampler(num_environments=num_environments, num_samples = num_samples)
+    i = 0
+    for epoch in range(num_epochs):
+        for env_i in mesampler:
+            print(i, env_i)
+            i+=1
+    

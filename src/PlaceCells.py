@@ -27,6 +27,7 @@ class PlaceCells:
         self.DoG = DoG
         self.surround_scale = surround_scale
         self.p = p
+        self.seed = seed
 
     def softmax_response(self, pos):
         """Place cell response as modelled by Sorscher"""
