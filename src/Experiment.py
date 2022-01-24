@@ -102,6 +102,41 @@ class Experiment:
         )
         self.pc_ensembles[0].seed = "sorsher loaded place cells"
 
+    @staticmethod
+    def get_default_ecology(seed):
+        # init default environments
+        environments = [
+            ratsimulator.Environment.Rectangle(boxsize=(2.2, 2.2), soft_boundary=0.03)
+        ]
+
+        # init default agents
+        agents = [
+            ratsimulator.Agent(
+                environment=environments[0],
+                angle0=None,
+                p0=None,
+                dt=0.02,
+                turn_angle=5.76 * 2,
+                b=0.13 * 2 * np.pi,
+                mu=0,
+                boundary_mode="sorschers",
+            )
+        ]
+
+        # init default place cell ensembles
+        pc_ensembles = [
+            PlaceCells(
+                environment=environments[0],
+                npcs=512,
+                pc_width=0.12,
+                DoG=True,
+                surround_scale=2,
+                p=2.0,
+                seed=seed,
+            )
+        ]
+        return environments, agents, pc_ensembles
+
     def _load_experiment(self):
         print("Loading experiment details")
         with open(self.paths["experiment"] / "params.pkl", "rb") as f:
