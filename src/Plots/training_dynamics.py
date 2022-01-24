@@ -196,15 +196,13 @@ def training_dynamics_3ME(
     fig = plt.figure(figsize=(14,10))
     history_grid = plt.GridSpec(6, 2, wspace=0.1, hspace=0.25, left=0.1, right=0.23)
     ratemap_grids = []
-    ratemap_grids.append(
-        plt.GridSpec(6, 4, wspace=0.2, hspace=0.25, left=0.3, right=0.6,)
-    )
-    ratemap_grids.append(
-        plt.GridSpec(6, 4, wspace=0.2, hspace=0.25, left=0.48, right=0.78,)
-    )
-    ratemap_grids.append(
-        plt.GridSpec(6, 4, wspace=0.2, hspace=0.25, left=0.65, right=.95,)
-    )
+    for env_rate_i in range(n_rate_plt := 4):
+        overlap = 0.12*3 / n_rate_plt
+        left_pos = .3 + env_rate_i*(0.9 / n_rate_plt - overlap)
+        right_pos = left_pos + 0.9 / n_rate_plt
+        ratemap_grids.append(
+            plt.GridSpec(6, 4, wspace=0.2, hspace=0.25, left=left_pos, right=right_pos,)
+        )
 
     # find training phases as a fraction of loss-differences
     ce = np.array(training_metrics["CE"])
