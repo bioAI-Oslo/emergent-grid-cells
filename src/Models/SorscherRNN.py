@@ -273,7 +273,7 @@ class SorscherRNN(torch.nn.Module):
                 save_dict["loss_history"] = loss_history
                 save_dict["training_metrics"] = training_metrics
                 save_dict["model_state_dict"] = self.state_dict()
-                torch.save(save_dict, checkpoint_path / f"{epoch:04d}")
+                torch.save(save_dict, checkpoint_path / f"{epoch:05d}")
 
             # update tqdm training-bar description
             pbar.set_description(
