@@ -52,6 +52,7 @@ class Dataset(torch.utils.data.Dataset):
         self.pc_ensembles = pc_ensembles
         self.seq_len = seq_len
         self.num_samples = num_samples
+        self.context = context
 
     def __len__(self):
         return self.num_samples
@@ -68,7 +69,7 @@ class Dataset(torch.utils.data.Dataset):
         pc_positions = place_cells.softmax_response(positions)
         init_pc_positions, labels = pc_positions[0], pc_positions[1:]
         
-        if context:
+        if self.context:
             # add context as one hot encoding corresponding to index
             context = torch.arange(len(self.pc_ensembles)) == index 
             # simply concatenate to end of initial signal
