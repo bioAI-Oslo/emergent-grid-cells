@@ -12,14 +12,18 @@ class SorscherRNN(torch.nn.Module):
     """
 
     def __init__(
-        self, place_cell_ensembles, Ng=4096, Np=512, nonlinearity="relu", **kwargs
+        self, place_cell_ensembles, Ng=4096, Np=512, nonlinearity="relu", context = False, **kwargs
     ):
         super(SorscherRNN, self).__init__(**kwargs)
         self.place_cell_ensembles = place_cell_ensembles
         self.Ng, self.Np = Ng, Np
 
         # define network architecture
-        self.init_position_encoder = torch.nn.Linear(Np, Ng, bias=False)
+        if context:
+            Ninit = Np + len(self.place_cell_ensembles)
+        else:
+            Ninit = Np
+        self.init_position_encoder = torch.nn.Linear(Ninit, Ng, bias=False)
         self.RNN = torch.nn.RNN(
             input_size=2,
             hidden_size=Ng,
