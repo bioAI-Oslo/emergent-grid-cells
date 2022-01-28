@@ -233,28 +233,30 @@ class SorscherRNN(torch.nn.Module):
             running_pred_error, running_true_error = 0, 0
             for inputs, labels, positions, indices in trainloader:
                 # zero the parameter gradients
-                optimizer.zero_grad()
+                optimizer.zero_grad(set_to_none = True)
                 # forward + backward + optimize
                 log_predictions = self(inputs, log_softmax=True)
                 loss = self.loss_fn(log_predictions, labels, weight_decay)
                 loss.backward()
-                optimizer.step()
-                running_loss += loss.item()
+                optimizer.step() 
 
-                # update training metrics
-                labels = labels.to(self.device, dtype=self.dtype)
-                positions = positions.to(self.device, dtype=self.dtype)
-                pred_error, true_error = self.position_error(
-                    log_predictions, labels, positions, indices
-                )
-                cross_entropy_value = self.CE(log_predictions, labels).item()
-                entropy_value = self.entropy(labels).item()
-                running_ce += cross_entropy_value
-                running_entropy += entropy_value
-                running_KL += self.KL(cross_entropy_value, entropy_value)
-                running_l2_reg += self.l2_reg(weight_decay).item()
-                running_pred_error += pred_error.item()
-                running_true_error += true_error.item()
+                with torch.no_grad():
+                    running_loss += loss.item()
+
+                    # update training metrics
+                    labels = labels.to(self.device, dtype=self.dtype)
+                    positions = positions.to(self.device, dtype=self.dtype)
+                    pred_error, true_error = self.position_error(
+                        log_predictions, labels, positions, indices
+                    )
+                    cross_entropy_value = self.CE(log_predictions, labels).item()
+                    entropy_value = self.entropy(labels).item()
+                    running_ce += cross_entropy_value
+                    running_entropy += entropy_value
+                    running_KL += self.KL(cross_entropy_value, entropy_value)
+                    running_l2_reg += self.l2_reg(weight_decay).item()
+                    running_pred_error += pred_error.item()
+                    running_true_error += true_error.item()
 
             # add training metrics to training history
             loss_history.append(running_loss / len(trainloader))
