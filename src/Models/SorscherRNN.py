@@ -1,8 +1,14 @@
 import torch
 import numpy as np
 import tqdm
+import pickle
 
-from ratsimulator import trajectory_generator
+import copy
+import sys
+
+sys.path.append("../") if "../" not in sys.path else None
+
+from Logger import *
 
 
 class SorscherRNN(torch.nn.Module):
@@ -35,6 +41,14 @@ class SorscherRNN(torch.nn.Module):
         for param in self.parameters():
             torch.nn.init.xavier_uniform_(param.data, gain=1.0)
 
+        # evaluate model on random place cell basis
+        self.novel_place_cell_ensembles = []
+        for place_cell_ensemble in place_cell_ensembles:
+            self.novel_place_cell_ensembles.append(copy.deepcopy(place_cell_ensemble))
+            self.novel_place_cell_ensembles[-1].global_remap(
+                seed=np.random.randint(len(place_cell_ensembles), 23031994)
+            )
+
         # pruning
         self.original_weights = []
         self._rnnh_prune_mask = torch.ones((Ng, Ng), device=self.device)
@@ -44,14 +58,17 @@ class SorscherRNN(torch.nn.Module):
     def to(self, device=None, *args, **kwargs):
         """Overwrites: To also add place_cells on same device"""
         # copy place cells before putting on gpu avoid conflict with dataloader
-        import copy
-
         self.place_cell_ensembles = [
             copy.copy(place_cells) for place_cells in self.place_cell_ensembles
         ]
         if device is not None:
             for i, place_cells in enumerate(self.place_cell_ensembles):
-                self.place_cell_ensembles[i].pcs = place_cells.pcs.to(device)
+                self.place_cell_ensembles[i].pcs = self.place_cell_ensembles[i].pcs.to(
+                    device
+                )
+                self.novel_place_cell_ensembles[
+                    i
+                ].pcs = self.novel_place_cell_ensembles[i].pcs.to(device)
         return super(SorscherRNN, self).to(device, *args, **kwargs)
 
     @property
@@ -137,24 +154,9 @@ class SorscherRNN(torch.nn.Module):
         gs = self.g(inputs)
         return self.p(gs, log_softmax)
 
-    def CE(self, log_predictions, labels):
-        return torch.mean(-torch.sum(labels * log_predictions, axis=-1))
-
-    def entropy(self, labels):
-        """
-        The entropy. Note that entropy is a positive measure.
-        Hence the negation at the start. When used to calculate KL:
-        KL = CE - entropy
-        """
-        return torch.mean(
-            -torch.sum(torch.nan_to_num(labels * torch.log(labels)), axis=-1)
-        )
-
-    def KL(self, cross_entropy_value, entropy_value):
-        return cross_entropy_value - entropy_value
 
     def l2_reg(self, weight_decay):
-        return weight_decay * torch.sum(self.RNN.weight_hh_l0 ** 2)
+        return weight_decay * torch.sum(self.RNN.weight_hh_l0**2)
 
     def loss_fn(self, log_predictions, labels, weight_decay):
         """
@@ -166,40 +168,28 @@ class SorscherRNN(torch.nn.Module):
         # rather than classic CE implementations assuming one-hot p(x).
         if labels.device != self.device:
             labels = labels.to(self.device, dtype=self.dtype)
-        return self.CE(log_predictions, labels) + self.l2_reg(weight_decay)
+        return CE(log_predictions, labels) + self.l2_reg(weight_decay)
 
-    def position_error(self, preds, labels, positions, indices):
-        batch_size = labels.shape[0]
-        pred_error, true_error = 0, 0
-        for env_i, place_cells in enumerate(self.place_cell_ensembles):
+    def position_error(self, pc_pos, cartesian_pos, indices, place_cell_ensembles):
+        batch_size = pc_pos.shape[0]
+        err = 0
+        for env_i, place_cells in enumerate(place_cell_ensembles):
             mask_i = np.array(indices) == env_i
-            decoded_pred_pos = place_cells.to_euclid(preds[mask_i])
-            decoded_true_pos = place_cells.to_euclid(labels[mask_i])
+            decoded_pos = place_cells.to_euclid(pc_pos[mask_i])
             # sum over patchy-batch dim (mean after loop), mean over seq_len dim,
             # "sum" (euclidean) over spatial dim
-            pred_error += torch.sum(
+            err += torch.sum(
                 torch.mean(
                     torch.sqrt(
                         torch.sum(
-                            (decoded_pred_pos - positions[mask_i, 1:]) ** 2, axis=-1
+                            (decoded_pos - cartesian_pos[mask_i, 1:]) ** 2, axis=-1
                         )
                     ),
                     axis=-1,
                 )
             )
-            true_error += torch.sum(
-                torch.mean(
-                    torch.sqrt(
-                        torch.sum(
-                            (decoded_true_pos - positions[mask_i, 1:]) ** 2, axis=-1
-                        )
-                    ),
-                    axis=-1,
-                )
-            )
-        pred_error /= batch_size
-        true_error /= batch_size
-        return pred_error, true_error
+        err /= batch_size
+        return err
 
     def train(
         self,
@@ -207,27 +197,19 @@ class SorscherRNN(torch.nn.Module):
         optimizer,
         weight_decay,
         nepochs,
-        checkpoint_path,
-        loss_history=[],
-        training_metrics={},
+        paths,
+        logger=None,
     ):
-        start_epoch = len(loss_history)
-        if start_epoch == 0:
-            training_metrics["CE"] = []
-            training_metrics["entropy"] = []
-            training_metrics["KL"] = []
-            training_metrics["l2_reg"] = []
-            training_metrics["pred_error"] = []
-            training_metrics["true_error"] = []
+        logger = Logger(len(trainloader)) if not logger else logger
+        start_epoch = len(logger.loss_history["familiar"])
 
         # save_iter = 0
         pbar = tqdm.tqdm(range(start_epoch, nepochs))
         for epoch in pbar:
             # generic torch training loop
-            running_loss = 0.0
-            running_ce, running_entropy, running_KL, running_l2_reg = 0, 0, 0, 0
-            running_pred_error, running_true_error = 0, 0
+            logger.new_epoch()
             for inputs, labels, positions, indices in trainloader:
+                indices = np.array(indices)
                 # zero the parameter gradients
                 optimizer.zero_grad()
                 # forward + backward + optimize
@@ -235,49 +217,76 @@ class SorscherRNN(torch.nn.Module):
                 loss = self.loss_fn(log_predictions, labels, weight_decay)
                 loss.backward()
                 optimizer.step()
-                running_loss += loss.item()
 
                 # update training metrics
                 labels = labels.to(self.device, dtype=self.dtype)
                 positions = positions.to(self.device, dtype=self.dtype)
-                pred_error, true_error = self.position_error(
-                    log_predictions, labels, positions, indices
+                pred_error = self.position_error(
+                    log_predictions, positions, indices, self.place_cell_ensembles
                 )
-                cross_entropy_value = self.CE(log_predictions, labels).item()
-                entropy_value = self.entropy(labels).item()
-                running_ce += cross_entropy_value
-                running_entropy += entropy_value
-                running_KL += self.KL(cross_entropy_value, entropy_value)
-                running_l2_reg += self.l2_reg(weight_decay).item()
-                running_pred_error += pred_error.item()
-                running_true_error += true_error.item()
+                true_error = self.position_error(
+                    labels, positions, indices, self.place_cell_ensembles
+                )
+                logger.update(
+                    "familiar",
+                    loss,
+                    log_predictions,
+                    labels,
+                    self.l2_reg(weight_decay),
+                    pred_error,
+                    true_error,
+                )
 
-            # add training metrics to training history
-            loss_history.append(running_loss / len(trainloader))
-            training_metrics["CE"].append(running_ce / len(trainloader))
-            training_metrics["entropy"].append(running_entropy / len(trainloader))
-            training_metrics["KL"].append(running_KL / len(trainloader))
-            training_metrics["l2_reg"].append(running_l2_reg / len(trainloader))
-            training_metrics["pred_error"].append(running_pred_error / len(trainloader))
-            training_metrics["true_error"].append(running_true_error / len(trainloader))
+                # measure model in novel environment (global remapping)
+                with torch.no_grad():
+                    labels = []
+                    for env_i, novel_place_cell_ensemble in enumerate(
+                        self.novel_place_cell_ensembles
+                    ):
+                        mask_i = indices == env_i
+                        labels.append(
+                            novel_place_cell_ensemble.softmax_response(
+                                positions[mask_i]
+                            )
+                        )
+                    labels = torch.cat(labels)
+                    labels = labels[:, 1:]  # labels are without init pos
+                    inputs[1] = labels[:, 0]  # change init pos basis to novel pc basis
 
-            # save_iter += 1
-            # if save_iter >= int(np.sqrt(epoch)) or epoch == nepochs:
-            #    save frequency gets sparser (sqrt) with training
-            #    save_iter = 0
+                    log_predictions = self(inputs, log_softmax=True)
+                    loss = self.loss_fn(log_predictions, labels, weight_decay)
 
-            # save model training dynamics (model weight history)
+                    # update training metrics
+                    pred_error = self.position_error(
+                        log_predictions,
+                        positions,
+                        indices,
+                        self.novel_place_cell_ensembles,
+                    )
+                    true_error = self.position_error(
+                        labels, positions, indices, self.novel_place_cell_ensembles
+                    )
+                    logger.update(
+                        "novel",
+                        loss,
+                        log_predictions,
+                        labels,
+                        self.l2_reg(weight_decay),
+                        pred_error,
+                        true_error,
+                    )
+
+            # save model history
             if not (epoch % 10) or epoch == (nepochs - 1):
                 save_dict = {}
                 save_dict["optimizer_state_dict"] = optimizer.state_dict()
-                save_dict["loss_history"] = loss_history
-                save_dict["training_metrics"] = training_metrics
                 save_dict["model_state_dict"] = self.state_dict()
-                torch.save(save_dict, checkpoint_path / f"{epoch:05d}")
+                torch.save(save_dict, paths["checkpoints"] / f"{epoch:05d}")
+                with open(paths["experiment"] / "logger.pkl", "wb") as f:
+                    pickle.dump(logger, f)
 
             # update tqdm training-bar description
             pbar.set_description(
-                f"Epoch={epoch}/{nepochs}, loss={loss_history[-1]}, decoding_error(pred/true)={training_metrics['pred_error'][-1]}/{training_metrics['true_error'][-1]}"
+                    f"Epoch={epoch}/{nepochs}, loss(F,N)={logger.loss_history['familiar'][-1]:.4f}, {logger.loss_history['novel'][-1]:.4f}, error(P,T)={logger.training_metrics['familiar']['pred_error'][-1]:.4f},{logger.training_metrics['familiar']['true_error'][-1]:.4f}"
             )
-        return loss_history, training_metrics
-
+        return logger

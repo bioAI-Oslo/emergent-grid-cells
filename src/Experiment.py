@@ -39,6 +39,8 @@ class Experiment:
             Path(base_path) / "data" if base_path else Path().home() / "data"
         )
         self.paths["project"] = self.paths["data"] / "emergent-grid-cells"
+        if not os.path.exists(self.paths["project"]):
+            os.makedirs(self.paths["project"])
         self.paths["experiment"] = self.paths["project"] / self.name
 
         # set specific paths (results etc)

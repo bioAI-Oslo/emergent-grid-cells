@@ -20,6 +20,7 @@ class PlaceCells:
                 npcs: Number of place cells
                 pc_width: Array-like or scalar. Tuning curve of place cells
         """
+        self.environment = environment
         self.pcs = environment.sample_uniform(npcs, seed=seed)  # sample place cell
         self.pcs = torch.tensor(self.pcs, dtype=dtype)
         self.npcs = npcs
@@ -27,6 +28,11 @@ class PlaceCells:
         self.DoG = DoG
         self.surround_scale = surround_scale
         self.p = p
+        self.seed = seed
+
+    def global_remap(self, seed, **kwargs):
+        self.pcs = self.environment.sample_uniform(self.npcs, seed=seed)
+        self.pcs = torch.tensor(self.pcs, **kwargs)
         self.seed = seed
 
     def softmax_response(self, pos):
