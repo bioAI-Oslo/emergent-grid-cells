@@ -25,10 +25,9 @@ class SorscherRNN(torch.nn.Module):
         self.Ng, self.Np = Ng, Np
 
         # define network architecture
-        if context:
-            Ninit = Np + len(self.place_cell_ensembles)
-        else:
-            Ninit = Np
+        self.context = context
+        Ninit = Np + len(self.place_cell_ensembles)*self.context
+        
         self.init_position_encoder = torch.nn.Linear(Ninit, Ng, bias=False)
         self.RNN = torch.nn.RNN(
             input_size=2,
@@ -58,6 +57,9 @@ class SorscherRNN(torch.nn.Module):
         self._rnnh_prune_mask = torch.ones((Ng, Ng), device=self.device)
         self._rnni_prune_mask = torch.ones((Ng, 2), device=self.device)
         self._prune_mask_idxs = []
+
+        self.init_place_cells = self.novel_place_cell_ensembles[0] 
+
 
     def to(self, device=None, *args, **kwargs):
         """Overwrites: To also add place_cells on same device"""
@@ -217,6 +219,12 @@ class SorscherRNN(torch.nn.Module):
                 # zero the parameter gradients
                 optimizer.zero_grad(set_to_none = True)
                 # forward + backward + optimize
+                
+                ############################# 
+                initial_state = self.init_place_cells.softmax_response(positions[:,0])
+                inputs[-1] = initial_state
+                #############################
+
                 log_predictions = self(inputs, log_softmax=True)
                 loss = self.loss_fn(log_predictions, labels, weight_decay)
                 loss.backward()
@@ -241,44 +249,45 @@ class SorscherRNN(torch.nn.Module):
                     true_error,
                 )
 
-                # measure model in novel environment (global remapping)
-                with torch.no_grad():
-                    labels = []
-                    for env_i, novel_place_cell_ensemble in enumerate(
-                        self.novel_place_cell_ensembles
-                    ):
-                        mask_i = indices == env_i
-                        labels.append(
-                            novel_place_cell_ensemble.softmax_response(
-                                positions[mask_i]
+                if not self.context:
+                    # measure model in novel environment (global remapping)
+                    with torch.no_grad():
+                        labels = []
+                        for env_i, novel_place_cell_ensemble in enumerate(
+                            self.novel_place_cell_ensembles
+                        ):
+                            mask_i = indices == env_i
+                            labels.append(
+                                novel_place_cell_ensemble.softmax_response(
+                                    positions[mask_i]
+                                )
                             )
+                        labels = torch.cat(labels)
+                        labels = labels[:, 1:]  # labels are without init pos
+                        inputs[1] = labels[:, 0]  # change init pos basis to novel pc basis
+
+                        log_predictions = self(inputs, log_softmax=True)
+                        loss = self.loss_fn(log_predictions, labels, weight_decay)
+
+                        # update training metrics
+                        pred_error = self.position_error(
+                            log_predictions,
+                            positions,
+                            indices,
+                            self.novel_place_cell_ensembles,
                         )
-                    labels = torch.cat(labels)
-                    labels = labels[:, 1:]  # labels are without init pos
-                    inputs[1] = labels[:, 0]  # change init pos basis to novel pc basis
-
-                    log_predictions = self(inputs, log_softmax=True)
-                    loss = self.loss_fn(log_predictions, labels, weight_decay)
-
-                    # update training metrics
-                    pred_error = self.position_error(
-                        log_predictions,
-                        positions,
-                        indices,
-                        self.novel_place_cell_ensembles,
-                    )
-                    true_error = self.position_error(
-                        labels, positions, indices, self.novel_place_cell_ensembles
-                    )
-                    logger.update(
-                        "novel",
-                        loss,
-                        log_predictions,
-                        labels,
-                        self.l2_reg(weight_decay),
-                        pred_error,
-                        true_error,
-                    )
+                        true_error = self.position_error(
+                            labels, positions, indices, self.novel_place_cell_ensembles
+                        )
+                        logger.update(
+                            "novel",
+                            loss,
+                            log_predictions,
+                            labels,
+                            self.l2_reg(weight_decay),
+                            pred_error,
+                            true_error,
+                        )
 
             # save model history
             if not (epoch % 10) or epoch == (nepochs - 1):
