@@ -221,7 +221,7 @@ class SorscherRNN(torch.nn.Module):
                 # forward + backward + optimize
                 
                 ############################# 
-                initial_state = self.init_place_cells.softmax_response(positions[:,0])
+                initial_state = self.init_place_cells.softmax_response(positions[:,0].to(self.device, dtype = self.dtype))
                 inputs[-1] = initial_state
                 #############################
 
