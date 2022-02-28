@@ -55,6 +55,7 @@ class Experiment:
         # model parameters
         self.params["Ng"] = 4096
         self.params["Np"] = 512
+        self.params["context_signal"] = False
         # training parameters
         self.params["sampler"] = "MESampler"
         self.params["weight_decay"] = 1e-4
@@ -64,6 +65,7 @@ class Experiment:
         self.params["nsteps"] = 100
         self.params["nepochs"] = 1000
         # metadata
+        self.params["save_freq"] = 10
         self.params["date"] = datetime.datetime.now()
 
         # init default environments

@@ -23,13 +23,11 @@ class SorscherRNN(torch.nn.Module):
         super(SorscherRNN, self).__init__(**kwargs)
         self.place_cell_ensembles = place_cell_ensembles
         self.Ng, self.Np = Ng, Np
+        self.context = context
 
         # define network architecture
-        if context:
-            Ninit = Np + len(self.place_cell_ensembles)
-        else:
-            Ninit = Np
-        self.init_position_encoder = torch.nn.Linear(Ninit, Ng, bias=False)
+        Nin = Np + context * len(self.place_cell_ensembles)
+        self.init_position_encoder = torch.nn.Linear(Nin, Ng, bias=False)
         self.RNN = torch.nn.RNN(
             input_size=2,
             hidden_size=Ng,
@@ -201,6 +199,7 @@ class SorscherRNN(torch.nn.Module):
         optimizer,
         weight_decay,
         nepochs,
+        save_freq,
         paths,
         logger=None,
     ):
@@ -241,47 +240,48 @@ class SorscherRNN(torch.nn.Module):
                     true_error,
                 )
 
-                # measure model in novel environment (global remapping)
-                with torch.no_grad():
-                    labels = []
-                    for env_i, novel_place_cell_ensemble in enumerate(
-                        self.novel_place_cell_ensembles
-                    ):
-                        mask_i = indices == env_i
-                        labels.append(
-                            novel_place_cell_ensemble.softmax_response(
-                                positions[mask_i]
+                if not self.context:
+                    # measure model in novel environment (global remapping)
+                    with torch.no_grad():
+                        labels = []
+                        for env_i, novel_place_cell_ensemble in enumerate(
+                            self.novel_place_cell_ensembles
+                        ):
+                            mask_i = indices == env_i
+                            labels.append(
+                                novel_place_cell_ensemble.softmax_response(
+                                    positions[mask_i]
+                                )
                             )
+                        labels = torch.cat(labels)
+                        labels = labels[:, 1:]  # labels are without init pos
+                        inputs[1] = labels[:, 0]  # change init pos basis to novel pc basis
+
+                        log_predictions = self(inputs, log_softmax=True)
+                        loss = self.loss_fn(log_predictions, labels, weight_decay)
+
+                        # update training metrics
+                        pred_error = self.position_error(
+                            log_predictions,
+                            positions,
+                            indices,
+                            self.novel_place_cell_ensembles,
                         )
-                    labels = torch.cat(labels)
-                    labels = labels[:, 1:]  # labels are without init pos
-                    inputs[1] = labels[:, 0]  # change init pos basis to novel pc basis
-
-                    log_predictions = self(inputs, log_softmax=True)
-                    loss = self.loss_fn(log_predictions, labels, weight_decay)
-
-                    # update training metrics
-                    pred_error = self.position_error(
-                        log_predictions,
-                        positions,
-                        indices,
-                        self.novel_place_cell_ensembles,
-                    )
-                    true_error = self.position_error(
-                        labels, positions, indices, self.novel_place_cell_ensembles
-                    )
-                    logger.update(
-                        "novel",
-                        loss,
-                        log_predictions,
-                        labels,
-                        self.l2_reg(weight_decay),
-                        pred_error,
-                        true_error,
-                    )
+                        true_error = self.position_error(
+                            labels, positions, indices, self.novel_place_cell_ensembles
+                        )
+                        logger.update(
+                            "novel",
+                            loss,
+                            log_predictions,
+                            labels,
+                            self.l2_reg(weight_decay),
+                            pred_error,
+                            true_error,
+                        )
 
             # save model history
-            if not (epoch % 10) or epoch == (nepochs - 1):
+            if not (epoch % save_freq) or epoch == (nepochs - 1):
                 save_dict = {}
                 save_dict["optimizer_state_dict"] = optimizer.state_dict()
                 save_dict["model_state_dict"] = self.state_dict()

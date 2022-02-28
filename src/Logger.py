@@ -60,12 +60,12 @@ class Logger:
         self.training_metrics[key]["KL"][-1] += (
             KL(cross_entropy_value, entropy_value) / self.num_batches_in_epoch
         )
-        self.training_metrics[key]["l2_reg"][-1] += l2_reg / self.num_batches_in_epoch
+        self.training_metrics[key]["l2_reg"][-1] += l2_reg.item() / self.num_batches_in_epoch
         self.training_metrics[key]["pred_error"][-1] += (
-            pred_error / self.num_batches_in_epoch
+            pred_error.item() / self.num_batches_in_epoch
         )
         self.training_metrics[key]["true_error"][-1] += (
-            true_error / self.num_batches_in_epoch
+            true_error.item() / self.num_batches_in_epoch
         )
 
         self.loss_history[key][-1] += loss.item() / self.num_batches_in_epoch
