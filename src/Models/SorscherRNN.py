@@ -44,12 +44,15 @@ class SorscherRNN(torch.nn.Module):
             torch.nn.init.xavier_uniform_(param.data, gain=1.0)
 
         # evaluate model on random place cell basis
-        self.novel_place_cell_ensembles = []
-        for place_cell_ensemble in place_cell_ensembles:
-            self.novel_place_cell_ensembles.append(copy.deepcopy(place_cell_ensemble))
-            self.novel_place_cell_ensembles[-1].global_remap(
-                seed=np.random.randint(len(place_cell_ensembles), 23031994)
-            )
+        try:
+            self.novel_place_cell_ensembles = []
+            for place_cell_ensemble in place_cell_ensembles:
+                self.novel_place_cell_ensembles.append(copy.deepcopy(place_cell_ensemble))
+                self.novel_place_cell_ensembles[-1].global_remap(
+                    seed=np.random.randint(len(place_cell_ensembles), 23031994)
+                )
+        except:
+            pass
 
         # pruning
         self.original_weights = []
@@ -68,9 +71,12 @@ class SorscherRNN(torch.nn.Module):
                 self.place_cell_ensembles[i].pcs = self.place_cell_ensembles[i].pcs.to(
                     device
                 )
-                self.novel_place_cell_ensembles[
-                    i
-                ].pcs = self.novel_place_cell_ensembles[i].pcs.to(device)
+                try:
+                    self.novel_place_cell_ensembles[
+                        i
+                    ].pcs = self.novel_place_cell_ensembles[i].pcs.to(device)
+                except:
+                    pass
         return super(SorscherRNN, self).to(device, *args, **kwargs)
 
     @property
