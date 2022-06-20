@@ -46,13 +46,12 @@ class MESampler(torch.utils.data.Sampler[int]):
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(
-        self, agents, pc_ensembles, num_samples, seq_len=20, context = False, **kwargs
+        self, agents, pc_ensembles, num_samples, seq_len=20, **kwargs
     ):
         self.agents = agents
         self.pc_ensembles = pc_ensembles
         self.seq_len = seq_len
         self.num_samples = num_samples
-        self.context = context
 
     def __len__(self):
         return self.num_samples
@@ -69,11 +68,6 @@ class Dataset(torch.utils.data.Dataset):
         pc_positions = place_cells.softmax_response(positions)
         init_pc_positions, labels = pc_positions[0], pc_positions[1:]
         
-        if self.context:
-            # add context as one hot encoding corresponding to index
-            context = torch.arange(len(self.pc_ensembles)) == index 
-            # simply concatenate to end of initial signal
-            init_pc_positions = torch.cat((init_pc_positions, context), dim = -1)
         return [[velocities, init_pc_positions], labels, positions, index]
 
 

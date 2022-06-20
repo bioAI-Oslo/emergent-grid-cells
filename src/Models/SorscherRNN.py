@@ -18,16 +18,14 @@ class SorscherRNN(torch.nn.Module):
     """
 
     def __init__(
-        self, place_cell_ensembles, Ng=4096, Np=512, nonlinearity="relu", context = False, **kwargs
+        self, place_cell_ensembles, Ng=4096, Np=512, nonlinearity="relu", **kwargs
     ):
         super(SorscherRNN, self).__init__(**kwargs)
         self.place_cell_ensembles = place_cell_ensembles
         self.Ng, self.Np = Ng, Np
-        self.context = context
 
         # define network architecture
-        Nin = Np + context * len(self.place_cell_ensembles)
-        self.init_position_encoder = torch.nn.Linear(Nin, Ng, bias=False)
+        self.init_position_encoder = torch.nn.Linear(Np, Ng, bias=False)
         self.RNN = torch.nn.RNN(
             input_size=2,
             hidden_size=Ng,
@@ -44,21 +42,14 @@ class SorscherRNN(torch.nn.Module):
             torch.nn.init.xavier_uniform_(param.data, gain=1.0)
 
         # evaluate model on random place cell basis
-        try:
-            self.novel_place_cell_ensembles = []
-            for place_cell_ensemble in place_cell_ensembles:
-                self.novel_place_cell_ensembles.append(copy.deepcopy(place_cell_ensemble))
-                self.novel_place_cell_ensembles[-1].global_remap(
-                    seed=np.random.randint(len(place_cell_ensembles), 23031994)
-                )
-        except:
-            pass
+        self.novel_room = copy.deepcopy(place_cell_ensembles[0])
+        self.novel_room.global_remap(23031994)
 
         # pruning
-        self.original_weights = []
-        self._rnnh_prune_mask = torch.ones((Ng, Ng), device=self.device)
-        self._rnni_prune_mask = torch.ones((Ng, 2), device=self.device)
-        self._prune_mask_idxs = []
+        #self.original_weights = []
+        #self._rnnh_prune_mask = torch.ones((Ng, Ng), device=self.device)
+        #self._rnni_prune_mask = torch.ones((Ng, 2), device=self.device)
+        #self._prune_mask_idxs = []
 
     def to(self, device=None, *args, **kwargs):
         """Overwrites: To also add place_cells on same device"""
@@ -71,12 +62,7 @@ class SorscherRNN(torch.nn.Module):
                 self.place_cell_ensembles[i].pcs = self.place_cell_ensembles[i].pcs.to(
                     device
                 )
-                try:
-                    self.novel_place_cell_ensembles[
-                        i
-                    ].pcs = self.novel_place_cell_ensembles[i].pcs.to(device)
-                except:
-                    pass
+        self.novel_room.pcs = self.novel_room.pcs.to(device)
         return super(SorscherRNN, self).to(device, *args, **kwargs)
 
     @property
@@ -246,45 +232,35 @@ class SorscherRNN(torch.nn.Module):
                     true_error,
                 )
 
-                if not self.context:
-                    # measure model in novel environment (global remapping)
-                    with torch.no_grad():
-                        labels = []
-                        for env_i, novel_place_cell_ensemble in enumerate(
-                            self.novel_place_cell_ensembles
-                        ):
-                            mask_i = indices == env_i
-                            labels.append(
-                                novel_place_cell_ensemble.softmax_response(
-                                    positions[mask_i]
-                                )
-                            )
-                        labels = torch.cat(labels)
-                        labels = labels[:, 1:]  # labels are without init pos
-                        inputs[1] = labels[:, 0]  # change init pos basis to novel pc basis
+                # measure model in novel environment (global remapping)
+                with torch.no_grad():
+                    labels = self.novel_room.softmax_response(positions)
+                    labels = labels[:, 1:]  # labels are without init pos
+                    inputs[1] = labels[:, 0]  # change init pos basis to novel pc basis
 
-                        log_predictions = self(inputs, log_softmax=True)
-                        loss = self.loss_fn(log_predictions, labels, weight_decay)
+                    log_predictions = self(inputs, log_softmax=True)
+                    loss = self.loss_fn(log_predictions, labels, weight_decay)
+                    indices = torch.zeros(labels.shape[0]) # all mini-batch indices are novel
 
-                        # update training metrics
-                        pred_error = self.position_error(
-                            log_predictions,
-                            positions,
-                            indices,
-                            self.novel_place_cell_ensembles,
-                        )
-                        true_error = self.position_error(
-                            labels, positions, indices, self.novel_place_cell_ensembles
-                        )
-                        logger.update(
-                            "novel",
-                            loss,
-                            log_predictions,
-                            labels,
-                            self.l2_reg(weight_decay),
-                            pred_error,
-                            true_error,
-                        )
+                    # update training metrics
+                    pred_error = self.position_error(
+                        log_predictions,
+                        positions,
+                        indices,
+                        [self.novel_room],
+                    )
+                    true_error = self.position_error(
+                        labels, positions, indices, [self.novel_room]
+                    )
+                    logger.update(
+                        "novel",
+                        loss,
+                        log_predictions,
+                        labels,
+                        self.l2_reg(weight_decay),
+                        pred_error,
+                        true_error,
+                    )
 
             # save model history
             if not (epoch % save_freq) or epoch == (nepochs - 1):
