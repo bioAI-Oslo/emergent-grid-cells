@@ -240,6 +240,7 @@ class SorscherRNN(torch.nn.Module):
 
                     log_predictions = self(inputs, log_softmax=True)
                     loss = self.loss_fn(log_predictions, labels, weight_decay)
+                    indices = torch.zeros(labels.shape[0]) # all mini-batch indices are novel
 
                     # update training metrics
                     pred_error = self.position_error(
