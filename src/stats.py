@@ -7,6 +7,7 @@ from scipy.special import i0
 import os
 import pickle
 from astropy.convolution import Gaussian2DKernel, convolve
+from scipy.signal import correlate
 
 from Experiment import Experiment
 from methods import filenames
@@ -15,6 +16,69 @@ from methods import filenames
 class IllegalArgumentError(ValueError):
     pass
 
+def phase_shifts(smooth_ratemaps: np.array, mask: np.array) -> np.array:
+    """
+    Determines the phase shifts in px in patterns between environments
+    Ratemaps are compared Neuron-index-wise (fixed neurons)
+
+    Args:
+        smooth_ratemaps (np.array): pre-processed (smooth) ratemaps in all environments
+                                        shape = (Num_Environments, Num_Recurrent_Neurons, Width_Field, Height_Field)
+        mask (np.array):            common mask array, shared between environments
+
+    Val:
+        upper_triangular (np.array):    phase shift vectors of selected neurons between the environments
+                                        upper triangular matrix in environment indices
+    """
+
+    # check if mask is common
+    if len(mask.shape) != 1:
+        raise IllegalArgumentError(
+                "mask is shared between environments and mus therefore be 1-dimensional"
+                )
+        if mask.shape[0] != smooth_ratemaps.shape[1]:
+            raise IllegalArgumentError(
+                "dimension mismatch between mask and neuron dimension in ratemaps"
+                )
+
+    def phase_shift(ratemap_i: np.array, ratemap_j: np.array) -> np.array:
+        """
+        Calculates the 2d phase shift vector between two ratemaps in px
+
+        Args:
+            ratemap_i, ratemap_j (np.array):   shape = (Width_Field, Height_Field)
+
+        Val:
+            dPhase (np.array):  Phase shift in px
+                                shape = (2, )
+                                [np.nan, np.nan] if no signal detected
+        """
+        cross_corr_2d = correlate(ratemap_i, ratemap_j)
+        # check for signal in cross_corr
+        if np.isclose(np.std(cross_corr_2d), 0.0):
+            return np.array([np.nan, np.nan])
+
+        # find DC peak in cross correlation =^ center of pattern
+        peaks = sm.find_peaks(cross_corr_2d)
+        p_DC = peaks[0]
+
+        dims = np.array(cross_corr_2d.shape)
+        origin = (dims - 1) / 2
+        return p_DC - origin
+
+    no_envs = smooth_ratemaps.shape[0]
+    upper_triangular = np.zeros((no_envs, no_envs, mask.sum(), 2))
+    for env_i, ratemaps_i in enumerate(smooth_ratemaps):
+        for env_j in range(env_i + 1, no_envs):
+            ratemaps_j = smooth_ratemaps[env_j]
+            dP = np.array(
+                    list(
+                        map(phase_shift, ratemaps_i[mask], ratemaps_j[mask])
+                        )
+                    )
+            upper_triangular[env_i, env_j] = dP
+
+    return upper_triangular
 
 def apply_to_selection(
     fn: Callable[[np.array], tuple], ratemaps: np.array, masks: np.array
@@ -244,41 +308,6 @@ def grid_spacing(ratemap, boxsize=2.2, p=0.1, verbose=False, **kwargs):
         print(f"{sigma=}>{p=}. Grid spacing might NOT be ROBUST")
 
     return median_dist * boxsize, sigma
-
-
-def phase_shift2(img):
-    """
-    Calculate the shift between two ratemaps.
-    Mode is either 'mode' or 'mean'
-
-    Method is more robust with smoothed ratemaps
-    """
-    peaks = sm.find_peaks(img)
-    closest_peak = peaks[0]
-    center = (np.array(img.shape) - 1) / 2
-    return closest_peak - center if np.std(img) != 0 else np.array([np.nan, np.nan])
-
-
-def phase_shift(ratemap1, ratemap2, norm=True, **kwargs):
-    """
-    Calculate the shift between two ratemaps.
-    Mode is either 'mode' or 'mean'
-
-    Method is more robust with smoothed ratemaps
-    """
-    crosscorr = scipy.signal.correlate(ratemap1, ratemap2, **kwargs)
-    peaks = sm.find_peaks(crosscorr)
-    closest_peak = peaks[0]
-    center = (np.array(crosscorr.shape) - 1) / 2
-    if not norm:
-        return (
-            closest_peak - center
-            if np.std(crosscorr) != 0
-            else np.array([np.nan, np.nan])
-        )
-    dist = np.linalg.norm(closest_peak - center)
-    return dist if np.std(crosscorr) != 0 else np.nan
-
 
 def grid_orientation(ratemap, **kwargs):
     """

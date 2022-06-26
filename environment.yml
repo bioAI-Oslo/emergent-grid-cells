@@ -1,6 +1,7 @@
 name: emergent-gcs
 channels:
   - conda-forge
+  - pytorch
   - defaults
 dependencies:
   - python=3
@@ -11,6 +12,8 @@ dependencies:
   - jupyterlab
   - pytorch
   - torchvision
+  - torchaudio
+  - cudatoolkit=11.3
   - imageio
   - pip
   - pip:
