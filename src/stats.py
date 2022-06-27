@@ -16,6 +16,49 @@ from methods import filenames
 class IllegalArgumentError(ValueError):
     pass
 
+def scalar_shifts(sc_vals: list) -> np.array:
+    """
+    Determines the shifts in scalar valued measures between environments
+    Measures are compared Neuron-index-wise
+
+    Args:
+        sc_vals (list): list of scalar valued measure value collections
+                        each element is supposed to be a np.array of the
+                        same cardinality containing scalar values in ordert 
+                        to ensure comparability between environments
+
+    Val:
+        upper_triangular (np.array):    scalar shifts of respective measures
+                                        between environments
+                                        upper triangular matrix in environment indices
+    """
+    num_envs = len(sc_vals)
+    
+    # test input for correct format
+    try:
+        cardinality_0 = sc_vals[0].shape[0]
+        for env_i in range(1, num_envs):
+            if sc_vals[env_i].ndim != 1:
+                raise IllegalArgumentError(
+                        f"Element:{env_ii} in argument list is not np.array of scalar values"
+                        )
+            if sc_vals[env_i].size != cardinality_0:
+                raise IllegalArgumentError(
+                        f"Element:{env_i} in argument list has deviating cardinality preventing index-wise compatibility between environments"
+                        )
+
+    except AttributeError:
+        print(f"Warning: Argument is not a list of numpy arrays. Can't process data. Return: None")
+        return None
+
+    upper_triangular = np.zeros((num_envs, num_envs, cardinality_0))
+    for env_i, sc_values_i in enumerate(sc_vals):
+        for env_j in range(env_i + 1, num_envs):
+            sc_values_j = sc_vals[env_j]
+            upper_triangular[env_i, env_j] = sc_values_i - sc_values_j
+
+    return upper_triangular
+
 def phase_shifts(smooth_ratemaps: np.array, mask: np.array) -> np.array:
     """
     Determines the phase shifts in px in patterns between environments
@@ -80,11 +123,11 @@ def phase_shifts(smooth_ratemaps: np.array, mask: np.array) -> np.array:
 
     return upper_triangular
 
-def apply_to_selection(
-    fn: Callable[[np.array], tuple], ratemaps: np.array, masks: np.array
+def apply_scalarFn_to_selection(
+        fn: Callable[[np.array], tuple], ratemaps: np.array, masks: np.array, rm_nan: bool = True
 ) -> list:
     """
-    Apply a function fn(ratemaps: np.array) -> (float, ...) to a selection of ratemaps
+    Apply a scalar valued function fn(ratemaps: np.array) -> (float, ...) to a selection of ratemaps
     specified by masks
     
     Args:
@@ -95,6 +138,8 @@ def apply_to_selection(
                                     (1) -- shape = (Num_selected_cells,) - same mask accross environments
                                     (2) -- shape = (Num_Environments, Num_selected_cells) - specified mask for each environment separately
                                     Anything incompatible will throw IllegalArgumentError
+        rm_nan (bool):          flag indicating if nan values are ought to be removed or not
+                                    default: True
                                     
     Val:
         fn_value_list (list(np.array)):   Values of the function
@@ -127,8 +172,9 @@ def apply_to_selection(
             fn_values_env[rmap_i], _ = fn(rmap)
 
         # remove NaN-values from array before adding to the list
-        idx_not_nan = ~np.isnan(fn_values_env)
-        fn_values_env = fn_values_env[idx_not_nan]
+        if rm_nan:
+            idx_not_nan = ~np.isnan(fn_values_env)
+            fn_values_env = fn_values_env[idx_not_nan]
 
         fn_value_list.append(fn_values_env)
 
