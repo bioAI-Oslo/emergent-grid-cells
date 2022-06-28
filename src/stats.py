@@ -16,6 +16,7 @@ from methods import filenames
 class IllegalArgumentError(ValueError):
     pass
 
+
 def scalar_shifts(sc_vals: list) -> np.array:
     """
     Determines the shifts in scalar valued measures between environments
@@ -33,22 +34,24 @@ def scalar_shifts(sc_vals: list) -> np.array:
                                         upper triangular matrix in environment indices
     """
     num_envs = len(sc_vals)
-    
+
     # test input for correct format
     try:
         cardinality_0 = sc_vals[0].shape[0]
         for env_i in range(1, num_envs):
             if sc_vals[env_i].ndim != 1:
                 raise IllegalArgumentError(
-                        f"Element:{env_ii} in argument list is not np.array of scalar values"
-                        )
+                    f"Element:{env_ii} in argument list is not np.array of scalar values"
+                )
             if sc_vals[env_i].size != cardinality_0:
                 raise IllegalArgumentError(
-                        f"Element:{env_i} in argument list has deviating cardinality preventing index-wise compatibility between environments"
-                        )
+                    f"Element:{env_i} in argument list has deviating cardinality preventing index-wise compatibility between environments"
+                )
 
     except AttributeError:
-        print(f"Warning: Argument is not a list of numpy arrays. Can't process data. Return: None")
+        print(
+            f"Warning: Argument is not a list of numpy arrays. Can't process data. Return: None"
+        )
         return None
 
     upper_triangular = np.zeros((num_envs, num_envs, cardinality_0))
@@ -58,6 +61,7 @@ def scalar_shifts(sc_vals: list) -> np.array:
             upper_triangular[env_i, env_j] = sc_values_i - sc_values_j
 
     return upper_triangular
+
 
 def phase_shifts(smooth_ratemaps: np.array, mask: np.array) -> np.array:
     """
@@ -77,12 +81,12 @@ def phase_shifts(smooth_ratemaps: np.array, mask: np.array) -> np.array:
     # check if mask is common
     if len(mask.shape) != 1:
         raise IllegalArgumentError(
-                "mask is shared between environments and mus therefore be 1-dimensional"
-                )
+            "mask is shared between environments and mus therefore be 1-dimensional"
+        )
         if mask.shape[0] != smooth_ratemaps.shape[1]:
             raise IllegalArgumentError(
                 "dimension mismatch between mask and neuron dimension in ratemaps"
-                )
+            )
 
     def phase_shift(ratemap_i: np.array, ratemap_j: np.array) -> np.array:
         """
@@ -114,17 +118,17 @@ def phase_shifts(smooth_ratemaps: np.array, mask: np.array) -> np.array:
     for env_i, ratemaps_i in enumerate(smooth_ratemaps):
         for env_j in range(env_i + 1, no_envs):
             ratemaps_j = smooth_ratemaps[env_j]
-            dP = np.array(
-                    list(
-                        map(phase_shift, ratemaps_i[mask], ratemaps_j[mask])
-                        )
-                    )
+            dP = np.array(list(map(phase_shift, ratemaps_i[mask], ratemaps_j[mask])))
             upper_triangular[env_i, env_j] = dP
 
     return upper_triangular
 
+
 def apply_scalarFn_to_selection(
-        fn: Callable[[np.array], tuple], ratemaps: np.array, masks: np.array, rm_nan: bool = True
+    fn: Callable[[np.array], tuple],
+    ratemaps: np.array,
+    masks: np.array,
+    rm_nan: bool = True,
 ) -> list:
     """
     Apply a scalar valued function fn(ratemaps: np.array) -> (float, ...) to a selection of ratemaps
@@ -162,12 +166,12 @@ def apply_scalarFn_to_selection(
         # one mask across environment
         # copy to the other environments
         masks = np.repeat(masks[np.newaxis, :], num_of_envs, axis=0)
-    
+
     fn_value_list = []
     for env_i, rmaps_env in enumerate(ratemaps):
         selected_ratemaps_env = rmaps_env[masks[env_i]]
         num_of_selected_cells = masks[env_i].sum()
-        fn_values_env = np.zeros((num_of_selected_cells, ))
+        fn_values_env = np.zeros((num_of_selected_cells,))
         for rmap_i, rmap in enumerate(selected_ratemaps_env):
             fn_values_env[rmap_i], _ = fn(rmap)
 
@@ -354,6 +358,7 @@ def grid_spacing(ratemap, boxsize=2.2, p=0.1, verbose=False, **kwargs):
         print(f"{sigma=}>{p=}. Grid spacing might NOT be ROBUST")
 
     return median_dist * boxsize, sigma
+
 
 def grid_orientation(ratemap, **kwargs):
     """

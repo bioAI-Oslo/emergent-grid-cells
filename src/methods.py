@@ -84,7 +84,7 @@ def multiimshow(zz, axs=None, titles=None, figsize=(10, 12), **kwargs):
     # plot response maps using contourf
     for k in range(zz.shape[0]):
         ax = axs[k // ncells, k % ncells]
-        ax.imshow(zz[k], cmap="jet")
+        ax.imshow(zz[k])#, cmap="jet")
         ax.axis("off")
         if titles is not None:
             ax.set_title(f"{titles[k]}")

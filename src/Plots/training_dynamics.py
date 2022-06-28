@@ -68,7 +68,7 @@ def training_dynamics_default(
     checkpoint_phase_nums = baround(ce_phase_idxs, save_freq)
     checkpoint_phase_nums = np.minimum(checkpoint_phase_nums, np.max(checkpoint_nums))
     checkpoint_phase_filenames = [
-        f"{checkpoint_phase_num:04d}.pkl"
+        f"{checkpoint_phase_num:05d}.pkl"
         for checkpoint_phase_num in checkpoint_phase_nums
     ]
 
@@ -221,7 +221,7 @@ def training_dynamics_3ME(
     checkpoint_phase_nums = baround(ce_phase_idxs, save_freq)
     checkpoint_phase_nums = np.minimum(checkpoint_phase_nums, np.max(checkpoint_nums))
     checkpoint_phase_filenames = [
-        f"{checkpoint_phase_num:04d}.pkl"
+        f"{checkpoint_phase_num:05d}.pkl"
         for checkpoint_phase_num in checkpoint_phase_nums
     ]
 
@@ -371,7 +371,7 @@ def training_dynamics_3CL(
         990, 1990, 2990
     ]
     checkpoint_phase_filenames = [
-        f"{checkpoint_phase_num:04d}.pkl"
+        f"{checkpoint_phase_num:05d}.pkl"
         for checkpoint_phase_num in checkpoint_phase_nums
     ]
 
