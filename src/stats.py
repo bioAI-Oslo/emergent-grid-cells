@@ -63,7 +63,9 @@ def scalar_shifts(sc_vals: list) -> np.array:
     return upper_triangular
 
 
-def phase_shifts(smooth_ratemaps: np.array, mask: np.array) -> np.array:
+def phase_shifts(
+    smooth_ratemaps: np.array, mask: np.array, boxsize: tuple = (2.2, 2.2)
+) -> np.array:
     """
     Determines the phase shifts in px in patterns between environments
     Ratemaps are compared Neuron-index-wise (fixed neurons)
@@ -72,6 +74,9 @@ def phase_shifts(smooth_ratemaps: np.array, mask: np.array) -> np.array:
         smooth_ratemaps (np.array): pre-processed (smooth) ratemaps in all environments
                                         shape = (Num_Environments, Num_Recurrent_Neurons, Width_Field, Height_Field)
         mask (np.array):            common mask array, shared between environments
+
+        boxsize (tuple):            physical box dimensions in the unit of the experiment, e.g. m
+                                        default: (2.2, 2.2)
 
     Val:
         upper_triangular (np.array):    phase shift vectors of selected neurons between the environments
@@ -105,13 +110,20 @@ def phase_shifts(smooth_ratemaps: np.array, mask: np.array) -> np.array:
         if np.isclose(np.std(cross_corr_2d), 0.0):
             return np.array([np.nan, np.nan])
 
-        # find DC peak in cross correlation =^ center of pattern
-        peaks = sm.find_peaks(cross_corr_2d)
-        p_DC = peaks[0]
+        # find dominant peak in cross correlation =^ center of pattern
+        peaks = sm.find_peaks(cross_corr_2d)  # px, range=[0, cross_corr_2d.shape - 1]
+        origin = (np.array(cross_corr_2d.shape) - 1) / 2  # px
+        # shift peak coordinates relative to origin
+        peaks = (
+            peaks - origin
+        )  # px, range=[-(cross_corr_2d.shape - 1) / 2, +(cross_corr_2d.shape - 1) / 2]
+        # make peak coordinates dimensionles
+        peaks = peaks / (np.array(cross_corr_2d.shape) / 2)  # dimless, range = [-1, 1]
+        # rescale to physical box dimensions
+        peaks *= np.array(boxsize)  # m, range = [-boxsize, boxsize]
 
-        dims = np.array(cross_corr_2d.shape)
-        origin = (dims - 1) / 2
-        return p_DC - origin
+        # return dominant peak indicating phase shift of the patterns
+        return peaks[0]
 
     no_envs = smooth_ratemaps.shape[0]
     upper_triangular = np.zeros((no_envs, no_envs, mask.sum(), 2))
@@ -141,7 +153,7 @@ def apply_scalarFn_to_selection(
                                 Two modes of operation:
                                     (1) -- shape = (Num_selected_cells,) - same mask accross environments
                                     (2) -- shape = (Num_Environments, Num_selected_cells) - specified mask for each environment separately
-                                    Anything incompatible will throw IllegalArgumentError
+                                    Anything incompatible will throw IllegalArgumentError 
         rm_nan (bool):          flag indicating if nan values are ought to be removed or not
                                     default: True
                                     
@@ -341,23 +353,33 @@ def find_peaks_idxs(img):
     return tuple(peaks.T)
 
 
-def grid_spacing(ratemap, boxsize=2.2, p=0.1, verbose=False, **kwargs):
+def grid_spacing(ratemap, boxsize: tuple = (2.2, 2.2), p=0.1, verbose=False, **kwargs):
     """
     Calculate the median distance to all 6 nearest peaks from center peak.
     """
     autocorr = scipy.signal.correlate(ratemap, ratemap, **kwargs)
-    peaks = sm.find_peaks(autocorr)
+    peaks = sm.find_peaks(autocorr)  # px, range = [0, autocorr.shape - 1]
+    # indicate the origin as the DC peak of the autocorrelation
+    origin = peaks[0]  # px
+    # shift peak coordinates relatively to origin
+    peaks = (
+        peaks - origin
+    )  # px, range = [-(autocorr.shape-1) / 2, (autocorr.shape-1) / 2]
+    # make dimensionless peak coordinates
+    peaks = peaks / ((np.array(autocorr.shape) - 1) / 2)  # dimless, range = [-1, 1]
+    # rescale to physical box dimensions
+    peaks *= np.array(boxsize)  # m, range = [-boxsize, boxsize]
+
     idx = num_closest_isodistance_points(ratemap)
     if idx is None:
         return np.nan, np.nan
-    hexagonal_dist = np.linalg.norm(peaks[1 : idx + 1] - peaks[0], axis=-1)
-    hexagonal_dist = hexagonal_dist / ratemap.shape[0]
+    hexagonal_dist = np.linalg.norm(peaks[1 : idx + 1], axis=-1)
     median_dist = np.median(hexagonal_dist)
     sigma = mad(hexagonal_dist)
     if sigma > p and verbose:
         print(f"{sigma=}>{p=}. Grid spacing might NOT be ROBUST")
 
-    return median_dist * boxsize, sigma
+    return median_dist, sigma
 
 
 def grid_orientation(ratemap, **kwargs):
