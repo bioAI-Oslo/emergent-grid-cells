@@ -63,7 +63,9 @@ def scalar_shifts(sc_vals: list) -> np.array:
     return upper_triangular
 
 
-def phase_shifts(smooth_ratemaps: np.array, mask: np.array, boxsize: tuple = (2.2, 2.2)) -> np.array:
+def phase_shifts(
+    smooth_ratemaps: np.array, mask: np.array, boxsize: tuple = (2.2, 2.2)
+) -> np.array:
     """
     Determines the phase shifts in px in patterns between environments
     Ratemaps are compared Neuron-index-wise (fixed neurons)
@@ -72,6 +74,9 @@ def phase_shifts(smooth_ratemaps: np.array, mask: np.array, boxsize: tuple = (2.
         smooth_ratemaps (np.array): pre-processed (smooth) ratemaps in all environments
                                         shape = (Num_Environments, Num_Recurrent_Neurons, Width_Field, Height_Field)
         mask (np.array):            common mask array, shared between environments
+
+        boxsize (tuple):            physical box dimensions in the unit of the experiment, e.g. m
+                                        default: (2.2, 2.2)
 
     Val:
         upper_triangular (np.array):    phase shift vectors of selected neurons between the environments
@@ -106,18 +111,19 @@ def phase_shifts(smooth_ratemaps: np.array, mask: np.array, boxsize: tuple = (2.
             return np.array([np.nan, np.nan])
 
         # find dominant peak in cross correlation =^ center of pattern
-        peaks = sm.find_peaks(cross_corr_2d) # px, range=[0, cross_corr_2d.shape - 1]
-        origin = (np.array(cross_corr_2d.shape) - 1) / 2 # px
+        peaks = sm.find_peaks(cross_corr_2d)  # px, range=[0, cross_corr_2d.shape - 1]
+        origin = (np.array(cross_corr_2d.shape) - 1) / 2  # px
         # shift peak coordinates relative to origin
-        peaks = peaks - origin # px, range=[-(cross_corr_2d.shape - 1) / 2, +(cross_corr_2d.shape - 1) / 2]
+        peaks = (
+            peaks - origin
+        )  # px, range=[-(cross_corr_2d.shape - 1) / 2, +(cross_corr_2d.shape - 1) / 2]
         # make peak coordinates dimensionles
-        peaks = peaks / (np.array(cross_corr_2d.shape) / 2) # dimless, range = [-1, 1]
+        peaks = peaks / (np.array(cross_corr_2d.shape) / 2)  # dimless, range = [-1, 1]
         # rescale to physical box dimensions
-        peaks *= np.array(boxsize) # m, range = [-boxsize, boxsize]
+        peaks *= np.array(boxsize)  # m, range = [-boxsize, boxsize]
 
         # return dominant peak indicating phase shift of the patterns
         return peaks[0]
-        
 
     no_envs = smooth_ratemaps.shape[0]
     upper_triangular = np.zeros((no_envs, no_envs, mask.sum(), 2))
@@ -347,20 +353,22 @@ def find_peaks_idxs(img):
     return tuple(peaks.T)
 
 
-def grid_spacing(ratemap, boxsize: tuple=(2.2, 2.2), p=0.1, verbose=False, **kwargs):
+def grid_spacing(ratemap, boxsize: tuple = (2.2, 2.2), p=0.1, verbose=False, **kwargs):
     """
     Calculate the median distance to all 6 nearest peaks from center peak.
     """
     autocorr = scipy.signal.correlate(ratemap, ratemap, **kwargs)
-    peaks = sm.find_peaks(autocorr) # px, range = [0, autocorr.shape - 1]
+    peaks = sm.find_peaks(autocorr)  # px, range = [0, autocorr.shape - 1]
     # indicate the origin as the DC peak of the autocorrelation
-    origin = peaks[0] # px
+    origin = peaks[0]  # px
     # shift peak coordinates relatively to origin
-    peaks = peaks - origin # px, range = [-(autocorr.shape-1) / 2, (autocorr.shape-1) / 2]
+    peaks = (
+        peaks - origin
+    )  # px, range = [-(autocorr.shape-1) / 2, (autocorr.shape-1) / 2]
     # make dimensionless peak coordinates
-    peaks = peaks / ((np.array(autocorr.shape)-1) / 2) # dimless, range = [-1, 1]
+    peaks = peaks / ((np.array(autocorr.shape) - 1) / 2)  # dimless, range = [-1, 1]
     # rescale to physical box dimensions
-    peaks *= np.array(boxsize) # m, range = [-boxsize, boxsize]
+    peaks *= np.array(boxsize)  # m, range = [-boxsize, boxsize]
 
     idx = num_closest_isodistance_points(ratemap)
     if idx is None:
@@ -370,7 +378,7 @@ def grid_spacing(ratemap, boxsize: tuple=(2.2, 2.2), p=0.1, verbose=False, **kwa
     sigma = mad(hexagonal_dist)
     if sigma > p and verbose:
         print(f"{sigma=}>{p=}. Grid spacing might NOT be ROBUST")
-    
+
     return median_dist, sigma
 
 
