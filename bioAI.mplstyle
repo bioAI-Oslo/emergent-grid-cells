@@ -406,7 +406,9 @@ axes.spines.right:  False
                            # https://en.wikipedia.org/wiki/Plus_and_minus_signs#Character_codes
 # axes.prop_cycle: cycler('color', ['#194587', '#1ca6e6', '#e8e8e8']) # bioAI colors
 # colorblind color scheme!
-axes.prop_cycle: cycler("color", ["348ABD", "7A68A6", "A60628", "467821", "CF4457", "188487", "E24A33"])
+#axes.prop_cycle: cycler("color", ["348ABD", "7A68A6", "A60628", "467821", "CF4457", "188487", "E24A33"])
+#axes.prop_cycle: cycler("color", ['66c2a5','fc8d62','8da0cb','a6cee3','1f78b4','b2df8a'])
+axes.prop_cycle: cycler("color", ['8c510a','d8b365','01665e','5ab4ac','f6e8c3','c7eae5'])
                       # E24A33 : orange
                       # 7A68A6 : purple
                       # 348ABD : blue
