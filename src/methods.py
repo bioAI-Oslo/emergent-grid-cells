@@ -64,31 +64,29 @@ def multicontourf(xx, yy, zz, titles=None, axs=None):
     return fig, axs
 
 
-def multiimshow(zz, axs=None, titles=None, figsize=(10, 12), **kwargs):
+def multiimshow(zz, axs=None, titles=None, figsize_i=(0.7, 0.7), **kwargs):
     """plot multiple imshow plots on a grid"""
     if axs is None:
-        ncells = int(np.sqrt(zz.shape[0]))
+        nrows = int(np.ceil(np.sqrt(zz.shape[0])))
+        ncols = int(np.sqrt(zz.shape[0]))
         fig, axs = plt.subplots(
-            nrows=ncells,
-            ncols=ncells,
-            figsize=figsize,
-            squeeze=False,
-            constrained_layout=True,
+            nrows=nrows,
+            ncols=ncols,
+            figsize=np.array(figsize_i) * nrows,
+            #squeeze=False,
             **kwargs,
         )
-        fig.set_constrained_layout_pads(w_pad=0.02, h_pad=0.02)
+        [ax.axis('off') for ax in axs.flat]
     else:
         fig = None
-        ncells = axs.shape[0]
+        nrows, ncols = axs.shape
 
-    # plot response maps using contourf
+    # plot response maps using imshow
     for k in range(zz.shape[0]):
-        ax = axs[k // ncells, k % ncells]
-        ax.imshow(zz[k])#, cmap="jet")
-        ax.axis("off")
+        ax = axs[k // nrows, k % ncols]
+        ax.imshow(zz[k])
         if titles is not None:
             ax.set_title(f"{titles[k]}")
-        ax.set_aspect("auto")
     return fig, axs
 
 
@@ -191,7 +189,7 @@ def _get_annulus_mask(sac):
     x, y = np.ogrid[0 : sac.shape[0], 0 : sac.shape[1]]
     # create annulus mask (outer circle fills the square autocorrellogram)
     outer_mask = (x - center_x) ** 2 + (y - center_y) ** 2 <= min(
-        center_x ** 2, center_y ** 2
+        center_x**2, center_y**2
     )
     inner_circle_dist, _ = _find_inner_circle_dist(sac)  # automatic inner circle mask
     inner_mask = (x - center_x) ** 2 + (y - center_y) ** 2 >= inner_circle_dist

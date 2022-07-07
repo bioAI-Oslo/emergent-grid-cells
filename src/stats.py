@@ -8,9 +8,11 @@ import os
 import pickle
 from astropy.convolution import Gaussian2DKernel, convolve
 from scipy.signal import correlate
+from scipy.stats import gaussian_kde
 
 from Experiment import Experiment
 from methods import filenames
+from synthetic_grid_cells import rotation_matrix
 
 
 class IllegalArgumentError(ValueError):
@@ -61,6 +63,87 @@ def scalar_shifts(sc_vals: list) -> np.array:
             upper_triangular[env_i, env_j] = sc_values_i - sc_values_j
 
     return upper_triangular
+
+
+
+def find_peaks(image):
+    """
+    Taken from cinpla/spatial-maps. But corrects center.
+
+    Find peaks sorted by distance from center of image.
+    Returns
+    -------
+    peaks : array
+        coordinates for peaks in image as [row, column]
+    """
+    import scipy.ndimage as ndimage
+    import scipy.ndimage.filters as filters
+    image = image.copy()
+    image[~np.isfinite(image)] = 0
+    image_max = filters.maximum_filter(image, 3)
+    is_maxima = (image == image_max)
+    labels, num_objects = ndimage.label(is_maxima)
+    indices = np.arange(1, num_objects+1)
+    peaks = ndimage.maximum_position(image, labels=labels, index=indices)
+    peaks = np.array(peaks)
+    center = (np.array(image.shape)-1) / 2
+    distances = np.linalg.norm(peaks - center, axis=1)
+    peaks = peaks[distances.argsort()]
+    return peaks
+
+
+def phase_fn(ratemap, boxsize):
+    image_size = (np.array(ratemap.shape) - 1)
+    origin = image_size / 2
+    #peaks = sm.find_peaks(ratemap)
+    peaks = find_peaks(ratemap)
+    closest_peak = peaks[0] # peaks are already in cardinal coordinates
+    closest_peak[0] = image_size[0] - closest_peak[0]
+    closest_peak = closest_peak[::-1]
+    
+    # Change to physical coordinates from pixels
+    closest_peak = closest_peak - origin # shift origin to center of image
+    closest_peak = closest_peak / image_size # dimensionless
+    closest_peak = closest_peak * boxsize # physical coordinates
+    return closest_peak
+
+
+def phase_shift_fn(calculated_phases, orientations):
+    """
+    calculated_phases: (#environments,#cells,2)
+    orientations: (#environments,#cells)
+    """
+    calculated_phases = np.copy(calculated_phases)
+    no_envs = calculated_phases.shape[0]
+    no_cells = orientations.shape[1]
+    for env_i in range(no_envs):
+        for cell_i in range(no_cells):
+            rev_rot_mat = rotation_matrix(orientations[env_i,cell_i], degrees=False)
+            calculated_phases[env_i,cell_i] = rev_rot_mat @ calculated_phases[env_i,cell_i]
+
+    shifts = np.zeros((no_envs, no_envs, no_cells, 2))
+    for env_i in range(no_envs):
+        for env_j in range(env_i + 1, no_envs):
+            shifts[env_i,env_j] = calculated_phases[env_j] - calculated_phases[env_i]
+
+    # upper triangular idxs
+    idxs = np.triu_indices(no_envs,k=1)
+    return shifts[idxs]
+
+
+def kde_heatmap(phases, max_val, res=64, bw_method=0.5):
+    """
+    This method assumes phases in matrix coordinates since it
+    uses a meshgrid which uses matrix coordinates.
+    """
+    pdf = gaussian_kde(phases.T, bw_method=bw_method)
+    p_xs = np.linspace(-max_val, max_val, num=res)
+    p_ys = np.linspace(-max_val, max_val, num=res)
+    xv, yv = np.meshgrid(p_xs, p_ys)
+    board = np.stack([xv,yv],axis=-1)
+    board_1d = np.reshape(board,(-1,2))
+    pdf_vals = pdf(board_1d.T)
+    return np.reshape(pdf_vals, (res,res))
 
 
 def phase_shifts(
@@ -389,11 +472,14 @@ def grid_orientation(ratemap, **kwargs):
     also calculate difference between angles (dangles)
     """
     autocorr = scipy.signal.correlate(ratemap, ratemap, **kwargs)
+    center = (np.array(autocorr.shape) - 1) / 2
     peaks = sm.find_peaks(autocorr)
+    peaks[:,0] = center[0] - peaks[:,0]
+    #peaks = peaks[:, ::-1] arctan2 takes (y, x), which is why we don't change axis sequence here
     idx = num_closest_isodistance_points(ratemap)
     if idx is None:
         return np.nan, np.nan
-    centered_peaks = peaks[1 : idx + 1] - peaks[0]  # shift coordinate system
+    centered_peaks = peaks[1 : idx + 1] - peaks[0]
     angles = np.sort(np.arctan2(*centered_peaks.T) % (2 * np.pi))  # [::-1]
     dangles = np.diff(angles)
     return angles[0], dangles
