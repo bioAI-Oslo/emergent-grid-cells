@@ -64,15 +64,15 @@ def multicontourf(xx, yy, zz, titles=None, axs=None):
     return fig, axs
 
 
-def multiimshow(zz, axs=None, titles=None, figsize_i=(0.7, 0.7), **kwargs):
+def multiimshow(zz, axs=None, titles=None, figsize=None, figsize_i=(0.7, 0.7), **kwargs):
     """plot multiple imshow plots on a grid"""
     if axs is None:
         nrows = int(np.ceil(np.sqrt(zz.shape[0])))
-        ncols = int(np.sqrt(zz.shape[0]))
+        ncols = int(round(np.sqrt(zz.shape[0])))
         fig, axs = plt.subplots(
             nrows=nrows,
             ncols=ncols,
-            figsize=np.array(figsize_i) * nrows,
+            figsize=figsize if fisize is None else np.array(figsize_i) * np.array([ncols,nrows]),
             #squeeze=False,
             **kwargs,
         )
@@ -83,7 +83,7 @@ def multiimshow(zz, axs=None, titles=None, figsize_i=(0.7, 0.7), **kwargs):
 
     # plot response maps using imshow
     for k in range(zz.shape[0]):
-        ax = axs[k // nrows, k % ncols]
+        ax = axs[k // ncols, k % ncols]
         ax.imshow(zz[k])
         if titles is not None:
             ax.set_title(f"{titles[k]}")
