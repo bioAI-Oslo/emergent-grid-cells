@@ -44,6 +44,9 @@ def set_size(width=345.0, fraction=1, mode='wide'):
         fig_height_in = fig_width_in / golden_ratio
     elif mode == 'square':
         fig_height_in = fig_width_in
+    elif mode == 'max':
+        # standard max-height of latex document
+        fig_height_in = 550.0 / 72.27
 
     fig_dim = (fig_width_in, fig_height_in)
 

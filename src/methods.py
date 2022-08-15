@@ -64,15 +64,22 @@ def multicontourf(xx, yy, zz, titles=None, axs=None):
     return fig, axs
 
 
-def multiimshow(zz, axs=None, titles=None, figsize=None, figsize_i=(0.7, 0.7), **kwargs):
+def multiimshow(zz, nrows=None, ncols=None, axs=None, titles=None, figsize=None, figsize_i=(0.7, 0.7), **kwargs):
     """plot multiple imshow plots on a grid"""
     if axs is None:
-        nrows = int(np.ceil(np.sqrt(zz.shape[0])))
-        ncols = int(round(np.sqrt(zz.shape[0])))
+        if nrows is not None:
+            # choose the size of one axes of the grid layout, filling
+            # in the other wrt. the amount of images to include
+            ncols = int(np.ceil(zz.shape[0] / nrows))
+        elif ncols is not None:
+            nrows = int(np.ceil(zz.shape[0] / ncols))
+        else:
+            nrows = int(np.ceil(np.sqrt(zz.shape[0])))
+            ncols = int(round(np.sqrt(zz.shape[0])))
         fig, axs = plt.subplots(
             nrows=nrows,
             ncols=ncols,
-            figsize=figsize if fisize is None else np.array(figsize_i) * np.array([ncols,nrows]),
+            figsize=figsize if figsize is not None else np.array(figsize_i) * np.array([ncols,nrows]),
             #squeeze=False,
             **kwargs,
         )
