@@ -95,7 +95,6 @@ def find_peaks(image):
 def phase_fn(ratemap, boxsize):
     image_size = (np.array(ratemap.shape) - 1)
     origin = image_size / 2
-    #peaks = sm.find_peaks(ratemap)
     peaks = find_peaks(ratemap)
     closest_peak = peaks[0] # peaks are already in cardinal coordinates
     closest_peak[0] = image_size[0] - closest_peak[0]
@@ -194,7 +193,7 @@ def phase_shifts(
             return np.array([np.nan, np.nan])
 
         # find dominant peak in cross correlation =^ center of pattern
-        peaks = sm.find_peaks(cross_corr_2d)  # px, range=[0, cross_corr_2d.shape - 1]
+        peaks = find_peaks(cross_corr_2d)  # px, range=[0, cross_corr_2d.shape - 1]
         origin = (np.array(cross_corr_2d.shape) - 1) / 2  # px
         # shift peak coordinates relative to origin
         peaks = (
@@ -432,7 +431,7 @@ def find_peaks_idxs(img):
     Overwrites find_peaks from spatial-maps
     such that the output is indecies of the peaks of the input
     """
-    peaks = sm.find_peaks(img)
+    peaks = find_peaks(img)
     return tuple(peaks.T)
 
 
@@ -441,7 +440,7 @@ def grid_spacing(ratemap, boxsize: tuple = (2.2, 2.2), p=0.1, verbose=False, **k
     Calculate the median distance to all 6 nearest peaks from center peak.
     """
     autocorr = scipy.signal.correlate(ratemap, ratemap, **kwargs)
-    peaks = sm.find_peaks(autocorr)  # px, range = [0, autocorr.shape - 1]
+    peaks = find_peaks(autocorr)  # px, range = [0, autocorr.shape - 1]
     # indicate the origin as the DC peak of the autocorrelation
     origin = peaks[0]  # px
     # shift peak coordinates relatively to origin
@@ -473,7 +472,7 @@ def grid_orientation(ratemap, **kwargs):
     """
     autocorr = scipy.signal.correlate(ratemap, ratemap, **kwargs)
     center = (np.array(autocorr.shape) - 1) / 2
-    peaks = sm.find_peaks(autocorr)
+    peaks = find_peaks(autocorr)
     peaks[:,0] = center[0] - peaks[:,0]
     #peaks = peaks[:, ::-1] arctan2 takes (y, x), which is why we don't change axis sequence here
     idx = num_closest_isodistance_points(ratemap)
@@ -490,7 +489,7 @@ def num_closest_isodistance_points(ratemap, **kwargs):
     Determine the number of grid points that are closest to the center
     """
     autocorr = scipy.signal.correlate(ratemap, ratemap, **kwargs)
-    peaks = sm.find_peaks(autocorr)
+    peaks = find_peaks(autocorr)
     if len(peaks) < 2:
         # need multiple peaks
         return None
