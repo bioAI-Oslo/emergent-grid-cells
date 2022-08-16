@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 from scipy import signal
 from scipy import interpolate
 import scipy
+import umap
+from sklearn.decomposition import PCA
 import pickle
 
 import os
@@ -95,6 +97,23 @@ def multiimshow(zz, nrows=None, ncols=None, axs=None, titles=None, figsize=None,
         if titles is not None:
             ax.set_title(f"{titles[k]}")
     return fig, axs
+
+
+def PCA_UMAP(states):
+    """ Run PCA followed by UMAP on states; Similar to Gardner et al. (2022)
+    
+    states.shape = (Nsamples, Nfeatures)
+    PCA down to 6 features/principal components 
+    UMAP of PCA componenents to 3 features.
+    
+    Note: Gardner et al. use n_neighbors = 5000 (more than number of samples in our case...)
+    """
+    pca_fit = PCA(n_components = 6).fit(states)
+    pca_result = pca_fit.transform(states)
+    umap_fit = umap.UMAP(n_components = 3, min_dist = 0.8,  # Almost Gardner et al. params
+                         n_neighbors = 1000, metric = "cosine", init = "spectral")
+    umap_result = umap_fit.fit_transform(states)#pca_result)
+    return pca_result, umap_result
 
 
 def interpolate_missing_pixels(

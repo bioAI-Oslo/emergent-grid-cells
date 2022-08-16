@@ -1,4 +1,27 @@
+import matplotlib.pyplot as plt
+import matplotlib
+import numpy as np
 
+def scatter3d(data, tags, ncols=4, nrows=4, s=1, alpha=0.5, azim_elev_title=True, **kwargs):
+    assert data.shape[-1] == 3, "data must have three axes. No more, no less."
+    if data.ndim > 2:
+        data = data.reshape(-1, 3)
+    fig, axs = plt.subplots(ncols=ncols, nrows=nrows, subplot_kw={"projection": "3d"}, **kwargs)
+    num_plots = ncols * nrows
+    
+    azims = np.linspace(0, 180, ncols + 1)[:-1]
+    elevs = np.linspace(0, 90, nrows + 1)[:-1]
+    view_angles = np.stack(np.meshgrid(azims, elevs), axis=-1).reshape(-1, 2)
+    norm = matplotlib.colors.Normalize(np.amin(tags), np.amax(tags))
+    color = matplotlib.cm.viridis(norm(tags))
+    for i, ax in enumerate(axs.flat):
+        ax.scatter(xs=data[:, 0], ys=data[:, 1], zs=data[:, 2], color=color, s=s, alpha=alpha)
+        ax.azim = view_angles[i, 0]
+        ax.elev = view_angles[i, 1]
+        ax.axis("off")
+        if azim_elev_title:
+            ax.set_title(f"azim={ax.azim}, elev={ax.elev}")
+    return fig, axs
 
 def set_size(width=345.0, fraction=1, mode='wide'):
     """Set figure dimensions to avoid scaling in LaTeX.
