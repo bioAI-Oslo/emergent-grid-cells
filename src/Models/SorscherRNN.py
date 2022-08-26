@@ -46,10 +46,10 @@ class SorscherRNN(torch.nn.Module):
         self.novel_room.global_remap(23031994)
 
         # pruning
-        #self.original_weights = []
-        #self._rnnh_prune_mask = torch.ones((Ng, Ng), device=self.device)
-        #self._rnni_prune_mask = torch.ones((Ng, 2), device=self.device)
-        #self._prune_mask_idxs = []
+        self.original_weights = []
+        self._rnnh_prune_mask = torch.ones((Ng, Ng), device=self.device)
+        self._rnni_prune_mask = torch.ones((Ng, 2), device=self.device)
+        self._prune_mask_idxs = []
 
     def to(self, device=None, *args, **kwargs):
         """Overwrites: To also add place_cells on same device"""

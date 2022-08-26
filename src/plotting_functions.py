@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 import numpy as np
 
-def scatter3d(data, tags, ncols=4, nrows=4, s=1, alpha=0.5, azim_elev_title=True, **kwargs):
+def scatter3d(data, tags, ncols=2, nrows=2, s=1, alpha=0.5, azim_elev_title=True, **kwargs):
     assert data.shape[-1] == 3, "data must have three axes. No more, no less."
     if data.ndim > 2:
         data = data.reshape(-1, 3)

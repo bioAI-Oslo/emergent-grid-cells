@@ -92,7 +92,7 @@ def find_peaks(image):
     return peaks
 
 
-def phase_fn(ratemap, boxsize):
+def phase_fn(ratemap, boxsize=2.2):
     image_size = (np.array(ratemap.shape) - 1)
     origin = image_size / 2
     peaks = find_peaks(ratemap)
@@ -419,11 +419,11 @@ def circular_kernel(data, kappa):
     return kernel
 
 
-def mad(x):
+def mad(x,axis=None):
     """
     mean absolute deviation
     """
-    return np.median(np.abs(x - np.median(x)))
+    return np.median(np.abs(x - np.median(x,axis)),axis)
 
 
 def find_peaks_idxs(img):

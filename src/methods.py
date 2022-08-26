@@ -7,6 +7,7 @@ import scipy
 import umap
 from sklearn.decomposition import PCA
 import pickle
+import tqdm
 
 import os
 
@@ -29,7 +30,7 @@ def compute_ratemaps(
     **kwargs,
 ):
     activities, x, y = [], [], []
-    for _ in range(num_trajectories):
+    for _ in tqdm.trange(num_trajectories):
         activities.append(model(dataset[0][0])[0, :, idxs].detach().cpu().numpy())
         x.append(dataset.agents[0].positions[1:, 0])
         y.append(dataset.agents[0].positions[1:, 1])
@@ -112,7 +113,7 @@ def PCA_UMAP(states):
     pca_result = pca_fit.transform(states)
     umap_fit = umap.UMAP(n_components = 3, min_dist = 0.8,  # Almost Gardner et al. params
                          n_neighbors = 1000, metric = "cosine", init = "spectral")
-    umap_result = umap_fit.fit_transform(states)#pca_result)
+    umap_result = umap_fit.fit_transform(pca_result)
     return pca_result, umap_result
 
 
