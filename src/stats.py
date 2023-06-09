@@ -1,69 +1,14 @@
-from collections.abc import Callable
 
 import numpy as np
-import spatial_maps as sm
 import scipy
 from scipy.special import i0
 import os
 import pickle
-from astropy.convolution import Gaussian2DKernel, convolve
 from scipy.signal import correlate
-from scipy.stats import gaussian_kde
+from scipy import interpolate
 
 from Experiment import Experiment
-from methods import filenames
 from synthetic_grid_cells import rotation_matrix
-
-
-class IllegalArgumentError(ValueError):
-    pass
-
-
-def scalar_shifts(sc_vals: list) -> np.array:
-    """
-    Determines the shifts in scalar valued measures between environments
-    Measures are compared Neuron-index-wise
-
-    Args:
-        sc_vals (list): list of scalar valued measure value collections
-                        each element is supposed to be a np.array of the
-                        same cardinality containing scalar values in ordert 
-                        to ensure comparability between environments
-
-    Val:
-        upper_triangular (np.array):    scalar shifts of respective measures
-                                        between environments
-                                        upper triangular matrix in environment indices
-    """
-    num_envs = len(sc_vals)
-
-    # test input for correct format
-    try:
-        cardinality_0 = sc_vals[0].shape[0]
-        for env_i in range(1, num_envs):
-            if sc_vals[env_i].ndim != 1:
-                raise IllegalArgumentError(
-                    f"Element:{env_ii} in argument list is not np.array of scalar values"
-                )
-            if sc_vals[env_i].size != cardinality_0:
-                raise IllegalArgumentError(
-                    f"Element:{env_i} in argument list has deviating cardinality preventing index-wise compatibility between environments"
-                )
-
-    except AttributeError:
-        print(
-            f"Warning: Argument is not a list of numpy arrays. Can't process data. Return: None"
-        )
-        return None
-
-    upper_triangular = np.zeros((num_envs, num_envs, cardinality_0))
-    for env_i, sc_values_i in enumerate(sc_vals):
-        for env_j in range(env_i + 1, num_envs):
-            sc_values_j = sc_vals[env_j]
-            upper_triangular[env_i, env_j] = sc_values_i - sc_values_j
-
-    return upper_triangular
-
 
 
 def find_peaks(image):
@@ -74,7 +19,7 @@ def find_peaks(image):
     Returns
     -------
     peaks : array
-        coordinates for peaks in image as [row, column]
+        coordinates for peaks in image as [row, column], iow (y,x)
     """
     import scipy.ndimage as ndimage
     import scipy.ndimage.filters as filters
@@ -91,222 +36,28 @@ def find_peaks(image):
     peaks = peaks[distances.argsort()]
     return peaks
 
-
-def phase_fn(ratemap, boxsize=2.2):
-    image_size = (np.array(ratemap.shape) - 1)
-    origin = image_size / 2
-    peaks = find_peaks(ratemap)
-    closest_peak = peaks[0] # peaks are already in cardinal coordinates
-    closest_peak[0] = image_size[0] - closest_peak[0]
-    closest_peak = closest_peak[::-1]
-    
-    # Change to physical coordinates from pixels
-    closest_peak = closest_peak - origin # shift origin to center of image
-    closest_peak = closest_peak / image_size # dimensionless
-    closest_peak = closest_peak * boxsize # physical coordinates
-    return closest_peak
-
-
-def phase_shift_fn(calculated_phases, orientations):
+def calculate_phase_shift(rate_map1, rate_map2, boxsize):
     """
-    calculated_phases: (#environments,#cells,2)
-    orientations: (#environments,#cells)
+    This function calculates the phase shift between two rate maps.
+
+    :param rate_map1: 2D array, first rate map.
+    :param rate_map2: 2D array, second rate map.
+    :param boxsize: tuple or list, physical dimensions of the box.
+    :return: array, dominant peak indicating phase shift of the patterns.
     """
-    calculated_phases = np.copy(calculated_phases)
-    no_envs = calculated_phases.shape[0]
-    no_cells = orientations.shape[1]
-    for env_i in range(no_envs):
-        for cell_i in range(no_cells):
-            rev_rot_mat = rotation_matrix(orientations[env_i,cell_i], degrees=False)
-            calculated_phases[env_i,cell_i] = rev_rot_mat @ calculated_phases[env_i,cell_i]
-
-    shifts = np.zeros((no_envs, no_envs, no_cells, 2))
-    for env_i in range(no_envs):
-        for env_j in range(env_i + 1, no_envs):
-            shifts[env_i,env_j] = calculated_phases[env_j] - calculated_phases[env_i]
-
-    # upper triangular idxs
-    idxs = np.triu_indices(no_envs,k=1)
-    return shifts[idxs]
-
-
-def kde_heatmap(phases, max_val, res=64, bw_method=0.5):
-    """
-    This method assumes phases in matrix coordinates since it
-    uses a meshgrid which uses matrix coordinates.
-    """
-    pdf = gaussian_kde(phases.T, bw_method=bw_method)
-    p_xs = np.linspace(-max_val, max_val, num=res)
-    p_ys = np.linspace(-max_val, max_val, num=res)
-    xv, yv = np.meshgrid(p_xs, p_ys)
-    board = np.stack([xv,yv],axis=-1)
-    board_1d = np.reshape(board,(-1,2))
-    pdf_vals = pdf(board_1d.T)
-    return np.reshape(pdf_vals, (res,res))
-
-
-def phase_shifts(
-    smooth_ratemaps: np.array, mask: np.array, boxsize: tuple = (2.2, 2.2)
-) -> np.array:
-    """
-    Determines the phase shifts in px in patterns between environments
-    Ratemaps are compared Neuron-index-wise (fixed neurons)
-
-    Args:
-        smooth_ratemaps (np.array): pre-processed (smooth) ratemaps in all environments
-                                        shape = (Num_Environments, Num_Recurrent_Neurons, Width_Field, Height_Field)
-        mask (np.array):            common mask array, shared between environments
-
-        boxsize (tuple):            physical box dimensions in the unit of the experiment, e.g. m
-                                        default: (2.2, 2.2)
-
-    Val:
-        upper_triangular (np.array):    phase shift vectors of selected neurons between the environments
-                                        upper triangular matrix in environment indices
-    """
-
-    # check if mask is common
-    if len(mask.shape) != 1:
-        raise IllegalArgumentError(
-            "mask is shared between environments and mus therefore be 1-dimensional"
-        )
-        if mask.shape[0] != smooth_ratemaps.shape[1]:
-            raise IllegalArgumentError(
-                "dimension mismatch between mask and neuron dimension in ratemaps"
-            )
-
-    def phase_shift(ratemap_i: np.array, ratemap_j: np.array) -> np.array:
-        """
-        Calculates the 2d phase shift vector between two ratemaps in px
-
-        Args:
-            ratemap_i, ratemap_j (np.array):   shape = (Width_Field, Height_Field)
-
-        Val:
-            dPhase (np.array):  Phase shift in px
-                                shape = (2, )
-                                [np.nan, np.nan] if no signal detected
-        """
-        cross_corr_2d = correlate(ratemap_i, ratemap_j)
-        # check for signal in cross_corr
-        if np.isclose(np.std(cross_corr_2d), 0.0):
-            return np.array([np.nan, np.nan])
-
-        # find dominant peak in cross correlation =^ center of pattern
-        peaks = find_peaks(cross_corr_2d)  # px, range=[0, cross_corr_2d.shape - 1]
-        origin = (np.array(cross_corr_2d.shape) - 1) / 2  # px
-        # shift peak coordinates relative to origin
-        peaks = (
-            peaks - origin
-        )  # px, range=[-(cross_corr_2d.shape - 1) / 2, +(cross_corr_2d.shape - 1) / 2]
-        # make peak coordinates dimensionles
-        peaks = peaks / (np.array(cross_corr_2d.shape) / 2)  # dimless, range = [-1, 1]
-        # rescale to physical box dimensions
-        peaks *= np.array(boxsize)  # m, range = [-boxsize, boxsize]
-
-        # return dominant peak indicating phase shift of the patterns
-        return peaks[0]
-
-    no_envs = smooth_ratemaps.shape[0]
-    upper_triangular = np.zeros((no_envs, no_envs, mask.sum(), 2))
-    for env_i, ratemaps_i in enumerate(smooth_ratemaps):
-        for env_j in range(env_i + 1, no_envs):
-            ratemaps_j = smooth_ratemaps[env_j]
-            dP = np.array(list(map(phase_shift, ratemaps_i[mask], ratemaps_j[mask])))
-            upper_triangular[env_i, env_j] = dP
-
-    return upper_triangular
-
-
-def apply_scalarFn_to_selection(
-    fn: Callable[[np.array], tuple],
-    ratemaps: np.array,
-    masks: np.array,
-    rm_nan: bool = True,
-) -> list:
-    """
-    Apply a scalar valued function fn(ratemaps: np.array) -> (float, ...) to a selection of ratemaps
-    specified by masks
-    
-    Args:
-        ratemaps (np.array):    Ratemaps of the recurrent neural layer
-                                    shape = (Num_Environments, Num_Reccurent_Neurons, Width_Field, Height_Field)
-        masks (np.array):       Mask array specifying which grid cells are shall be selected for evaluation
-                                Two modes of operation:
-                                    (1) -- shape = (Num_selected_cells,) - same mask accross environments
-                                    (2) -- shape = (Num_Environments, Num_selected_cells) - specified mask for each environment separately
-                                    Anything incompatible will throw IllegalArgumentError 
-        rm_nan (bool):          flag indicating if nan values are ought to be removed or not
-                                    default: True
-                                    
-    Val:
-        fn_value_list (list(np.array)):   Values of the function
-                                        len(fn_values) = Num_Environments
-    """
-
-    # check for mode of operation
-    # either one mask selects for grid cells across environments
-    # or each environment has its designated selection mask
-    num_of_envs = ratemaps.shape[0]
-    if len(masks.shape) != 1:
-        # one mask for each environment individually
-        if num_of_envs != masks.shape[0]:
-            raise IllegalArgumentError(
-                "masks must either be one dimensional or have same length as number of environments"
-            )
-            return None
-
-    if len(masks.shape) == 1:
-        # one mask across environment
-        # copy to the other environments
-        masks = np.repeat(masks[np.newaxis, :], num_of_envs, axis=0)
-
-    fn_value_list = []
-    for env_i, rmaps_env in enumerate(ratemaps):
-        selected_ratemaps_env = rmaps_env[masks[env_i]]
-        num_of_selected_cells = masks[env_i].sum()
-        fn_values_env = np.zeros((num_of_selected_cells,))
-        for rmap_i, rmap in enumerate(selected_ratemaps_env):
-            fn_values_env[rmap_i], _ = fn(rmap)
-
-        # remove NaN-values from array before adding to the list
-        if rm_nan:
-            idx_not_nan = ~np.isnan(fn_values_env)
-            fn_values_env = fn_values_env[idx_not_nan]
-
-        fn_value_list.append(fn_values_env)
-
-    return fn_value_list
-
-
-def get_smooth_ratemaps(experiment: Experiment, sigma: float = 1.0) -> np.array:
-    """
-    Retrieve rat maps associated with the experiment
-
-    Args:
-        experiment (Experiment):    Experiment object containing information about data
-        sigma (float):              Standard Deviation ("width") of 2D Gaussian Kernel the raw 
-                                    ratemaps are smoothed with
-                                        default: 1.0
-
-    Val:
-        ratemaps (np.array):        Ratemap array
-                                        shape: (Num of Envs, Num of Neurons, X, Y)
-    """
-    kernel = Gaussian2DKernel(x_stddev=sigma)
-    smooth_ratemaps = []
-
-    for env_i, env in enumerate(experiment.environments):
-        rmap_env_path = experiment.paths["ratemaps"] / f"env_{env_i}"
-        sorted_filenames = filenames(rmap_env_path)
-
-        with open(rmap_env_path / sorted_filenames[-1], "rb") as f:
-            raw_rmap = pickle.load(f)
-            smooth_rmap = convolve(raw_rmap, kernel.array[None])
-            smooth_ratemaps.append(smooth_rmap)
-
-    return np.array(smooth_ratemaps)
-
+    # Perform cross correlation
+    cross_corr_2d = correlate(rate_map1, rate_map2, mode="same")
+    if np.isclose(np.std(cross_corr_2d), 0.0):
+        return np.array([np.nan, np.nan])
+    # Find dominant peak in cross correlation, indicating the center of pattern
+    peak = find_peaks(cross_corr_2d)[0]
+    # center peak
+    peak = peak - (np.array(rate_map1.shape) - 1)/2
+    # convert pixel peak to physical peak
+    peak = peak / (np.array(rate_map1.shape) - 1) # range [-0.5, 0.5]
+    # peak is given in (y,x) image coordinates, but we want (x,y) coordinates, so we swap
+    peak = peak[::-1] * np.array(boxsize)
+    return peak
 
 def grid_score_masks(
     experiment: Experiment, percentile: float = 0.4, mode="intersection"
@@ -355,41 +106,32 @@ def grid_score_masks(
         return np.array(gc_scores)
 
     grid_cell_scores = load_gc_scores(experiment)
-
     # Shift grid cell scores to > 0
     shifted_gc_scores = grid_cell_scores - np.amin(grid_cell_scores, axis=-1)[:, None]
-
     # determine neurons that belong to the selection
     sorted_gc_scores = np.sort(shifted_gc_scores, axis=-1)
     cummulative_distribution = np.cumsum(sorted_gc_scores, axis=-1) / np.sum(
         shifted_gc_scores, axis=-1, keepdims=True
     )
     cum_mask = cummulative_distribution > percentile
-
     no_envs = len(experiment.environments)
-
     thresholds = [
         np.amin(sorted_gc_scores[env_i, cum_mask[env_i]]) for env_i in range(no_envs)
     ]
     thresholds += np.amin(grid_cell_scores, axis=-1)  # shift back
-
     masks = np.array(  # select for scores higher than thresholds per environment
         [grid_cell_scores[env_i] > thresholds[env_i] for env_i in range(no_envs)]
     )
     if mode == "separate":
         return masks
-
     if mode == "intersection":
         # check if apparent in all envs
         return np.prod(masks, axis=0).astype("bool")
-
     if mode == "union":
         # ehck if apparent in any env
         return np.sum(masks, axis=0).astype("bool")
-
     # if key word unknown return None
     return None
-
 
 def circular_kernel(data, kappa):
     """Generate a von Mises kernel for kernel density estimation
@@ -419,20 +161,28 @@ def circular_kernel(data, kappa):
     return kernel
 
 
+def fill_nan(ratemap, **kwargs):
+    # Get the indices of where the NaNs are
+    y_nan, x_nan = np.where(np.isnan(ratemap))
+    # Get the indices of where the NaNs aren't
+    y_not_nan, x_not_nan = np.where(~np.isnan(ratemap))
+    # Get the non-NaN values
+    ratemap_not_nan = ratemap[y_not_nan, x_not_nan]
+    # Interpolate
+    ratemap[y_nan, x_nan] = interpolate.griddata(
+        (y_not_nan, x_not_nan),  # points we know
+        ratemap_not_nan,  # values we know
+        (y_nan, x_nan),  # points to interpolate
+        **kwargs  # fill with nearest values
+    )
+    return ratemap
+
+
 def mad(x,axis=None):
     """
     mean absolute deviation
     """
     return np.median(np.abs(x - np.median(x,axis)),axis)
-
-
-def find_peaks_idxs(img):
-    """
-    Overwrites find_peaks from spatial-maps
-    such that the output is indecies of the peaks of the input
-    """
-    peaks = find_peaks(img)
-    return tuple(peaks.T)
 
 
 def grid_spacing(ratemap, boxsize: tuple = (2.2, 2.2), p=0.1, verbose=False, **kwargs):
@@ -500,3 +250,33 @@ def num_closest_isodistance_points(ratemap, **kwargs):
     dddx = scipy.signal.correlate(dists, np.array([-1, 1]), mode="valid")
     outliers = dddx > np.mean(dddx) + 2 * np.std(dddx)
     return np.argmax(outliers) + 1  # get the index of the first "True" occurence
+
+
+def make_disk_mask(size):
+    """Create a 2D mask of a disk (filled circle) for a square matrix of a given size"""
+    # Create a coordinate grid
+    y, x = np.ogrid[-size/2:size/2, -size/2:size/2]
+    # Create the disk mask
+    mask = x**2 + y**2 <= ((size-1)/2)**2
+    return mask
+
+
+def calculate_orientation_shift(ratemap1, ratemap2, rotation_res=360):
+    """
+    calculate orientation shift between two ratemaps
+    """
+    autocorr1 = scipy.signal.correlate(ratemap1, ratemap1, mode="same")
+    autocorr2 = scipy.signal.correlate(ratemap2, ratemap2, mode="same")
+    # normalize the autocorrelations
+    autocorr1 = autocorr1 / np.sum(autocorr1)
+    autocorr2 = autocorr2 / np.sum(autocorr2)
+    # slice out the largest disk that fits in the autocorrelation
+    disk_mask = make_disk_mask(autocorr1.shape[0])
+    rotations = np.linspace(-np.pi, np.pi, rotation_res)
+    scores = []
+    for rotation in rotations:
+        rotated_autocorr2 = scipy.ndimage.rotate(autocorr2, np.degrees(rotation), reshape=False, order=0)
+        score = np.sum(autocorr1[disk_mask] * rotated_autocorr2[disk_mask])
+        scores.append(score)
+    #return np.argmax(scores) / rotation_res * 2 * np.pi
+    return rotations[np.argmax(scores)]

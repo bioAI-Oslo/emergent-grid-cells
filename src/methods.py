@@ -92,9 +92,11 @@ def multiimshow(zz, nrows=None, ncols=None, axs=None, titles=None, figsize=None,
         nrows, ncols = axs.shape
 
     # plot response maps using imshow
+    # get vmin, vmax 
+    vmin, vmax = np.nanmin(zz), np.nanmax(zz)
     for k in range(zz.shape[0]):
         ax = axs[k // ncols, k % ncols]
-        ax.imshow(zz[k])
+        ax.imshow(zz[k], vmin=vmin, vmax=vmax)
         if titles is not None:
             ax.set_title(f"{titles[k]}")
     return fig, axs
