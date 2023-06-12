@@ -21,7 +21,6 @@ from Experiment import Experiment
 from Models import SorscherRNN
 from methods import filenames
 
-
 def load_experiment(path, name):
     experiment = Experiment(name = name, base_path = path)
     experiment.setup()
@@ -63,34 +62,32 @@ def create_trajectories(dataset, environment_idx, num_trajectories=1500):
     batch_velocities = torch.stack(batch_velocities).detach().numpy()
     return batch_inputs, batch_positions[:,1:], batch_velocities
 
-def run_model(model, dataset, n_envs, samples = 1500, start = 0, stop = 20):
+def run_model(model, dataset, envs, samples = 1500, start = 0, stop = 20):
     # run model in inference mode on samples generated from dataset across environments.
     """
     model: SorscherRNN model
     dataset: dataset, passed to create_trajectories
-    n_envs: number of environments
+    envs: iterable; e.g. list of environment indices. 
     samples: number of trajectories to run model on
     start: start index of returned timeseries; used to skip initial states
     """
     
     activities = []
-    env_tags = []
     r = [] # positions
     v = [] # velocities
 
-    for i in range(n_envs):
-        batch_inputs, batch_pos, batch_v = create_trajectories(dataset, i, num_trajectories = samples)
+    for env in tqdm.tqdm(envs):
+        batch_inputs, batch_pos, batch_v = create_trajectories(dataset, env, num_trajectories = samples)
         g = model.g(batch_inputs).detach().cpu().numpy()[:,start:stop]
         g = g.reshape(-1, g.shape[-1])
         activities.append(g)
         r.append(np.reshape(batch_pos[:,start:stop], (-1, batch_pos.shape[-1])))
         v.append(np.reshape(batch_v[:,start:stop], (-1, batch_v.shape[-1])))
-        env_tags.append(np.ones(len(g))*i)
 
     activities = np.stack(activities, axis=0)
     r = np.stack(r, axis=0)
     v = np.stack(v, axis=0)
-    return activities, env_tags, r, v
+    return activities, r, v
 
 def create_ratemaps(g, r, res):
     ratemaps = scipy.stats.binned_statistic_2d(r[:,0], r[:,1], g.T, bins=res)[0]
