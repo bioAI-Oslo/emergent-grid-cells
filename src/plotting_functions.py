@@ -15,7 +15,7 @@ def scatter3d(data, tags, ncols=2, nrows=2, s=1, alpha=0.5, azim_elev_title=True
     norm = matplotlib.colors.Normalize(np.amin(tags), np.amax(tags))
     color = matplotlib.cm.viridis(norm(tags))
     for i, ax in enumerate(axs.flat):
-        ax.scatter(xs=data[:, 0], ys=data[:, 1], zs=data[:, 2], color=color, s=s, alpha=alpha)
+        ax.scatter(xs=data[:, 0], ys=data[:, 1], zs=data[:, 2], color=color, s=s, alpha=alpha, edgecolor = 'none')
         ax.azim = view_angles[i, 0]
         ax.elev = view_angles[i, 1]
         ax.axis("off")
