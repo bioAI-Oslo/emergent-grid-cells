@@ -67,7 +67,7 @@ def multicontourf(xx, yy, zz, titles=None, axs=None):
     return fig, axs
 
 
-def multiimshow(zz, nrows=None, ncols=None, axs=None, titles=None, figsize=None, figsize_i=(0.7, 0.7), **kwargs):
+def multiimshow(zz, nrows=None, ncols=None, axs=None, titles=None, figsize=None, figsize_i=(0.7, 0.7), normalize=True, **kwargs):
     """plot multiple imshow plots on a grid"""
     if axs is None:
         if nrows is not None:
@@ -96,10 +96,32 @@ def multiimshow(zz, nrows=None, ncols=None, axs=None, titles=None, figsize=None,
     vmin, vmax = np.nanmin(zz), np.nanmax(zz)
     for k in range(zz.shape[0]):
         ax = axs[k // ncols, k % ncols]
-        ax.imshow(zz[k], vmin=vmin, vmax=vmax)
+        if normalize:
+            ax.imshow(zz[k], vmin=vmin, vmax=vmax)
+        else:
+            ax.imshow(zz[k])
         if titles is not None:
             ax.set_title(f"{titles[k]}")
     return fig, axs
+
+
+def multiimshow2(zz, figsize=(1,1), normalize=True, add_colorbar=True, rect=(0,0,1,0.87), axes_pad=0, **kwargs):
+    # prepare figure
+    ncols = int(np.ceil(np.sqrt(zz.shape[0])))
+    nrows = int(round(np.sqrt(zz.shape[0])))
+    from mpl_toolkits.axes_grid1 import ImageGrid
+    fig = plt.figure(figsize=figsize)
+    if add_colorbar and normalize:
+        grid = ImageGrid(fig, rect=rect, nrows_ncols=(nrows, ncols), axes_pad=axes_pad, cbar_mode='single', cbar_location='right', cbar_pad=0.1, cbar_size='5%')
+    else:
+        grid = ImageGrid(fig, rect=rect, nrows_ncols=(nrows, ncols), axes_pad=axes_pad)
+    vmin, vmax = (np.nanmin(zz), np.nanmax(zz)) if normalize else (None, None)
+    # plot response maps using imshow
+    for ax, data in zip(grid, zz):
+        im = ax.imshow(data, vmin=vmin, vmax=vmax, **kwargs)
+    [ax.axis('off') for ax in grid]
+    fig.colorbar(im, cax=grid.cbar_axes[0]) if (normalize and add_colorbar) else None
+    return fig, grid.axes_all
 
 
 def PCA_UMAP(states):
