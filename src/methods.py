@@ -124,7 +124,7 @@ def multiimshow2(zz, figsize=(1,1), normalize=True, add_colorbar=True, rect=(0,0
     return fig, grid.axes_all
 
 
-def PCA_UMAP(states):
+def PCA_UMAP(states, n_neighbors, metric = "cosine", min_dist = 0.8):
     """ Run PCA followed by UMAP on states; Similar to Gardner et al. (2022)
     
     states.shape = (Nsamples, Nfeatures)
@@ -135,8 +135,8 @@ def PCA_UMAP(states):
     """
     pca_fit = PCA(n_components = 6).fit(states)
     pca_result = pca_fit.transform(states)
-    umap_fit = umap.UMAP(n_components = 3, min_dist = 0.8,  # Almost Gardner et al. params
-                         n_neighbors = 1000, metric = "cosine", init = "spectral")
+    umap_fit = umap.UMAP(n_components = 3, min_dist = min_dist,  # Almost Gardner et al. params
+                         n_neighbors = n_neighbors, metric = metric, init = "spectral")
     umap_result = umap_fit.fit_transform(pca_result)
     return pca_result, umap_result
 
