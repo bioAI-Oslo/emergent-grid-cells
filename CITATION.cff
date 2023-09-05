@@ -1,9 +1,15 @@
 cff-version: 1.1.0
 message: "If you use this software, please cite it as below."
 authors:
-  - Vemund Schoeyen
-  - Markus Borud Pettersen
-  - Konstantin Holzhausen
-title: bioAI-Oslo/emergent-grid-cells: Publishes code for iScience paper: "Coherently Remapping Toroidal Cells But Not Grid Cells are Responsible for Path Integration in Virtual Agents"
+  - Family-names: "Schoeyen"
+    given-names: "Vemund"
+  - Family-names: "Borud Pettersen"
+    given-names: "Pettersen"
+  - Family-names: "Holzhausen"
+    given-names: "Konstantin"
+title: "Code for iScience paper: Coherently Remapping Toroidal Cells But Not Grid Cells are Responsible for Path Integration in Virtual Agents"
 version: v1.0
+doi: 10.5281/zenodo.8318009
 date-released: 2023-09-05
+URL: "https://github.com/bioAI-Oslo/emergent-grid-cells/tree/main"
+
