@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/362146259.svg)](https://zenodo.org/badge/latestdoi/362146259)
+
 # emergent-grid-cells
 
 ### Create and install Conda env from .yml file:
